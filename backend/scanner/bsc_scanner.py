@@ -49,12 +49,11 @@ TOKEN_DECIMALS[TOKENS['USDC']] = 18
 NULL_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 BSC_RPC_FALLBACKS = [
-    'https://bsc-dataseed1.binance.org/',
-    'https://bsc-dataseed2.binance.org/',
-    'https://bsc-dataseed3.binance.org/',
-    'https://bsc-dataseed4.binance.org/',
-    'https://bsc-dataseed1.defibit.io/',
-    'https://bsc-dataseed2.defibit.io/',
+    'https://rpc.ankr.com/bsc',
+    'https://bsc-rpc.publicnode.com',
+    'https://binance.llamarpc.com',
+    'https://bsc.meowrpc.com',
+    'https://bsc-dataseed.bnbchain.org',
 ]
 
 
