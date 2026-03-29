@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: arbpulse
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 1 --timeout 300 --bind 0.0.0.0:$PORT
+    plan: free
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: BSC_RPC_URL
+        sync: false          # Set in Render dashboard — your BSC RPC endpoint
+      - key: SOLANA_RPC_URL
+        sync: false          # Set in Render dashboard — your Solana RPC endpoint
+      - key: BSC_CONTRACT_ADDRESS
+        sync: false          # Set after deploying ArbPulseFlashArb.sol
+      - key: SOLANA_CONTRACT_ADDRESS
+        sync: false          # Set after deploying Solana program (optional)
+    staticPublishPath: ../frontend
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
