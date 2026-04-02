@@ -430,42 +430,75 @@ class BSCScanner:
                     )
 
                     # ── Display values ──────────────────────────────────────────────
-                    peak_usd   = result.get('peak_net_usd', 0.0)
+                    # Determine display loan amount
                     raw_amount = result.get('optimal_amount', 0)
+                    peak_usd   = result.get('peak_net_usd', 0.0)
 
-                    # For display: use the optimizer's loan if meaningful (>$0.50),
-                    # otherwise use a reference loan = gas_usd / 0.001 (what $0.1% net needs)
-                    MIN_DISPLAY_USD = 0.50
-                    if raw_amount / 1e18 * price_usd >= MIN_DISPLAY_USD:
+                    if raw_amount > 0:
                         display_loan = raw_amount
                     else:
-                        # Show what loan size would be needed to cover gas at 0.1% net
-                        ref_loan_usd    = gas_usd / 0.001  # $0.1% net
-                        ref_loan_tokens = int((ref_loan_usd / price_usd) * 1e18)
-                        # Cap at pool capacity
-                        max_disp = min(
-                            int(bd['r_base'] * 0.05),
-                            int(sd['r_base'] * 0.05),
-                        )
-                        display_loan = min(ref_loan_tokens, max_disp) if max_disp > 0 else ref_loan_tokens
+                        # Optimizer returned nothing useful — use reference loan
+                        # = what's needed to cover gas at this net_spread
+                        buy_spot_ref  = bd['r_quote'] / bd['r_base'] if bd['r_base'] > 0 else 0
+                        sell_spot_ref = sd['r_quote'] / sd['r_base'] if sd['r_base'] > 0 else 0
+                        gross_sp = ((buy_spot_ref - sell_spot_ref) / sell_spot_ref * 100) if sell_spot_ref > 0 else 0
+                        total_fee_sp = (flash_fee_bps + bd['fee_bps'] + sd['fee_bps']) / 100
+                        net_sp = gross_sp - total_fee_sp
+                        if net_sp > 0.001 and gas_usd > 0 and price_usd > 0:
+                            ref_usd = gas_usd / (net_sp / 100)
+                            display_loan = int((ref_usd / price_usd) * 1e18)
+                        else:
+                            display_loan = int(gas_usd / price_usd * 1e18) if price_usd > 0 else 0
+                        # Cap to 5% of smaller pool
+                        max_disp = min(int(bd['r_base'] * 0.05), int(sd['r_base'] * 0.05))
+                        if max_disp > 0:
+                            display_loan = min(display_loan, max_disp)
 
-                    loan_tok  = display_loan / 1e18
-                    loan_usd  = loan_tok * price_usd
+                    loan_tok = display_loan / 1e18
+                    loan_usd = loan_tok * price_usd
 
-                    # Gross/net from actual optimizer result
-                    gross_tok = result.get('gross_profit', 0) / 1e18
-                    net_tok   = result.get('net_profit', 0)   / 1e18
-                    gross_usd = gross_tok * price_usd
-                    net_usd   = peak_usd - gas_usd
-                    net_pct   = (net_tok / (display_loan / 1e18) * 100) if display_loan > 0 else 0
+                    # Compute actual AMM output at display_loan
+                    from scanner.amm_math import get_amount_out_v2 as _amm_out
+                    _q    = _amm_out(display_loan, bd['r_base'], bd['r_quote'],  bd['fee_bps'])
+                    _out  = _amm_out(_q,            sd['r_quote'], sd['r_base'], sd['fee_bps'])
+                    _flash = (display_loan * flash_fee_bps) // 10000
+
+                    # Gross = theoretical gain from the spread alone (loan * spread%)
+                    # This is always positive if there's any spread, even if fees eat it.
+                    # It tells users: "here's the price difference, fees are what's blocking profit"
+                    theoretical_gross = display_loan * spread / 100
+                    gross_tok  = theoretical_gross / 1e18
+                    gross_usd  = gross_tok * price_usd
+
+                    # Net = actual AMM output minus loan minus flash fee, then minus gas
+                    actual_net_raw = _out - display_loan - _flash  # in wei, can be negative
+                    net_tok_raw = actual_net_raw / 1e18
+                    net_usd_raw = net_tok_raw * price_usd - gas_usd
+
+                    # Contract auto-reverts if trade is unprofitable, so max real loss = gas
+                    # For display: profitable/marginal show real net, loss cards show -gas
+                    if net_usd_raw >= 0:
+                        net_tok = net_tok_raw
+                        net_usd = net_usd_raw
+                    else:
+                        # Show what the user would actually lose: just gas
+                        net_tok = -gas_usd / price_usd if price_usd > 0 else 0
+                        net_usd = -gas_usd
+                    net_pct  = (net_tok_raw / loan_tok * 100) if loan_tok > 0 else 0
 
                     buy_price  = bd['r_base'] / bd['r_quote'] if bd['r_quote'] > 0 else 0
                     sell_price = sd['r_base'] / sd['r_quote'] if sd['r_quote'] > 0 else 0
 
-                    # DEX fees based on the display loan (realistic, not tiny)
+                    # DEX fees = fee_bps on actual loan amounts
                     flash_fee_usd  = loan_usd * (flash_fee_bps / 10000)
-                    total_dex_fees = (loan_usd * (bd['fee_bps'] / 10000) +
-                                      loan_usd * (1 + spread/100) * (sd['fee_bps'] / 10000))
+                    buy_fee_usd    = loan_usd * (bd['fee_bps'] / 10000)
+                    sell_fee_usd   = (loan_usd + gross_usd) * (sd['fee_bps'] / 10000)
+                    total_dex_fees = buy_fee_usd + sell_fee_usd
+
+                    # Price impact based on display_loan
+                    from scanner.amm_math import calc_price_impact as _pi
+                    buy_impact  = _pi(display_loan, bd['r_base'])
+                    sell_impact = _pi(_q, sd['r_quote']) if _q > 0 else 0.0
 
                     # Status
                     is_profitable = (result.get('profitable', False)
@@ -474,10 +507,10 @@ class BSCScanner:
 
                     if is_profitable:
                         status = 'profitable'
-                    elif peak_usd > 0:
-                        status = 'marginal'      # positive peak but gas eats it
+                    elif gross_usd > 0 and net_usd > -gas_usd * 2:
+                        status = 'marginal'
                     else:
-                        status = 'unprofitable'  # spread below fee floor
+                        status = 'unprofitable' 
 
                     opp = {
                         'id':                 f"{pdata['quote_sym']}_{pdata['base_sym']}_{buy_dex}_{sell_dex}_{int(time.time())}",
@@ -507,8 +540,8 @@ class BSCScanner:
                         'netProfitPct':       round(net_pct,   4),
                         'buyPoolLiquidity':   round(bd['liq_usd'], 0),
                         'sellPoolLiquidity':  round(sd['liq_usd'], 0),
-                        'buyPriceImpact':     round(result.get('buy_price_impact',  0), 4),
-                        'sellPriceImpact':    round(result.get('sell_price_impact', 0), 4),
+                        'buyPriceImpact':     round(buy_impact,  4),
+                        'sellPriceImpact':    round(sell_impact, 4),
                         'status':             status,
                         'timestamp':          int(time.time()),
                     }
