@@ -566,9 +566,25 @@ class BSCScanner:
                     f"  peak_net_usd=${nm.get('peak_net_usd',0):.3f}"
                     f"  | {nm['reason']}"
                 )
+        # Show lowest-hurdle DEX combinations
+        dex_fees_map = {d: DEX_CONFIGS[d]['fee_bps'] for d in selected_dexes}
+        sorted_dexes = sorted(dex_fees_map.items(), key=lambda x: x[1])
+        low_combos = []
+        for d1, f1 in sorted_dexes[:4]:
+            for d2, f2 in sorted_dexes[:4]:
+                if d1 != d2:
+                    total = (flash_fee_bps + f1 + f2) / 100
+                    low_combos.append((total, d1, d2))
+        low_combos.sort()
         logger.info(
-            f"Gas cost: ${gas_usd:.2f} | BNB: ${bnb_price:.0f} | "
-            f"Min loan to cover gas at 0.05% net: ${gas_usd/0.0005:.0f}"
+            f"Gas: ${gas_usd:.3f} | BNB: ${bnb_price:.0f} | "
+            f"Lowest hurdle: {low_combos[0][1]}+{low_combos[0][2]} = {low_combos[0][0]:.2f}% "
+            f"(need spread>{low_combos[0][0]:.2f}% to profit)"
+        )
+        logger.info(
+            f"Min loan at 0.10% net: ${gas_usd/0.001:.0f} | "
+            f"at 0.20% net: ${gas_usd/0.002:.0f} | "
+            f"at 0.50% net: ${gas_usd/0.005:.0f}"
         )
 
         gc.collect()
