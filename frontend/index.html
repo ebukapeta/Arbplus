@@ -13,7 +13,12 @@
 <div id="noise-overlay"></div>
 <div id="grid-bg"></div>
 
-<!-- ─── HEADER ─────────────────────────────────────────────────── -->
+<!-- ─── TESTNET BANNER ──────────────────────────────────────────────────── -->
+<div id="testnet-banner" class="testnet-banner hidden">
+  ⚠ TESTNET MODE — Transactions use test tokens with no real value
+</div>
+
+<!-- ─── HEADER ─────────────────────────────────────────────────────────── -->
 <header id="main-header">
   <div class="header-inner">
     <div class="logo-area">
@@ -25,12 +30,10 @@
         <path d="M16 12 L16 28 M24 12 L24 28" stroke="url(#lgr)" stroke-width="1.5" opacity="0.5"/>
         <defs>
           <linearGradient id="lgr" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stop-color="#00e5ff"/>
-            <stop offset="100%" stop-color="#00ff87"/>
+            <stop offset="0%" stop-color="#00e5ff"/><stop offset="100%" stop-color="#00ff87"/>
           </linearGradient>
           <linearGradient id="lgr2" x1="0" y1="0" x2="40" y2="0" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stop-color="#00ff87"/>
-            <stop offset="100%" stop-color="#00e5ff"/>
+            <stop offset="0%" stop-color="#00ff87"/><stop offset="100%" stop-color="#00e5ff"/>
           </linearGradient>
         </defs>
       </svg>
@@ -40,11 +43,33 @@
       </div>
     </div>
 
-    <!-- Network selector -->
-    <div class="network-pills">
+    <!-- Mainnet / Testnet toggle -->
+    <div class="net-mode-toggle">
+      <span class="net-mode-label" id="net-mode-label-main">Mainnet</span>
+      <label class="toggle-switch">
+        <input type="checkbox" id="testnet-toggle">
+        <span class="toggle-slider"></span>
+      </label>
+      <span class="net-mode-label" id="net-mode-label-test">Testnet</span>
+    </div>
+
+    <!-- Network selector — 5 networks -->
+    <div class="network-pills" id="network-pills">
       <button class="network-pill active" data-network="bsc" id="net-pill-bsc">
         <span class="net-dot bsc"></span> BNB Chain
         <span class="net-connected-dot" id="net-ci-bsc"></span>
+      </button>
+      <button class="network-pill" data-network="eth" id="net-pill-eth">
+        <span class="net-dot eth"></span> Ethereum
+        <span class="net-connected-dot" id="net-ci-eth"></span>
+      </button>
+      <button class="network-pill" data-network="arb" id="net-pill-arb">
+        <span class="net-dot arb"></span> Arbitrum
+        <span class="net-connected-dot" id="net-ci-arb"></span>
+      </button>
+      <button class="network-pill" data-network="base" id="net-pill-base">
+        <span class="net-dot base"></span> Base
+        <span class="net-connected-dot" id="net-ci-base"></span>
       </button>
       <button class="network-pill" data-network="solana" id="net-pill-solana">
         <span class="net-dot sol"></span> Solana
@@ -67,7 +92,7 @@
   </div>
 </header>
 
-<!-- ─── WALLET PICKER MODAL ───────────────────────────────────── -->
+<!-- ─── WALLET PICKER MODAL ───────────────────────────────────────────── -->
 <div id="wallet-picker-modal" class="wallet-picker-overlay hidden">
   <div class="wallet-picker-box">
     <div class="wallet-picker-header">
@@ -79,10 +104,10 @@
   </div>
 </div>
 
-<!-- ─── TAB BAR ────────────────────────────────────────────────── -->
+<!-- ─── TAB BAR ────────────────────────────────────────────────────────── -->
 <nav id="tab-bar">
   <button class="tab-btn active" data-tab="scanner">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     Scanner
   </button>
   <button class="tab-btn" data-tab="results">
@@ -100,11 +125,18 @@
   </button>
 </nav>
 
-<!-- ─── MAIN CONTENT ───────────────────────────────────────────── -->
+<!-- ─── MAIN CONTENT ───────────────────────────────────────────────────── -->
 <main id="main-content">
 
   <!-- ── SCANNER TAB ── -->
   <section id="tab-scanner" class="tab-content active">
+
+    <!-- Network mode indicator inside scanner -->
+    <div id="scanner-mode-indicator" class="scanner-mode-indicator mainnet">
+      <span id="scanner-mode-dot" class="scanner-mode-dot"></span>
+      <span id="scanner-mode-text">BNB Chain · Mainnet</span>
+    </div>
+
     <div class="section-header">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       Scanner Config
@@ -113,26 +145,26 @@
     <div class="config-grid">
       <div class="config-field">
         <label>Min Net Profit %</label>
-        <input type="number" id="cfg-min-profit" value="0.30" step="0.05" min="0">
+        <input type="number" id="cfg-min-profit" value="0.10" step="0.05" min="0">
       </div>
       <div class="config-field">
         <label>Slippage Tolerance %</label>
-        <input type="number" id="cfg-slippage" value="0.50" step="0.05" min="0.1" max="5">
+        <input type="number" id="cfg-slippage" value="1.00" step="0.05" min="0.1" max="5">
       </div>
       <div class="config-field">
         <label>Scan Interval (s)</label>
-        <input type="number" id="cfg-interval" value="45" step="5" min="15" max="300">
+        <input type="number" id="cfg-interval" value="30" step="5" min="15" max="300">
       </div>
       <div class="config-field">
         <label>Min Pool Liquidity ($)</label>
-        <input type="number" id="cfg-min-liq" value="25000" step="5000" min="1000">
+        <input type="number" id="cfg-min-liq" value="2000" step="1000" min="500">
       </div>
-      <div class="config-field full-width">
-        <label>Flash Loan Provider</label>
-        <select id="cfg-flash-provider">
-          <!-- Populated by JS based on network -->
-        </select>
-      </div>
+    </div>
+
+    <!-- Flash loan provider info banner (auto-selection) -->
+    <div class="flash-auto-banner">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span>Flash loan provider is selected <strong>automatically</strong> — cheapest provider with available reserves for the base token is used per opportunity.</span>
     </div>
 
     <!-- Contract address -->
@@ -143,18 +175,14 @@
 
     <!-- Base tokens -->
     <div class="tokens-section">
-      <div class="section-label">Base Tokens <span class="label-note">(flash-loanable — the token borrowed)</span></div>
-      <div id="base-tokens-grid" class="tokens-grid">
-        <!-- Populated by JS -->
-      </div>
+      <div class="section-label">Base Tokens <span class="label-note">(flash-loanable)</span></div>
+      <div id="base-tokens-grid" class="tokens-grid"></div>
     </div>
 
     <!-- DEXes -->
     <div class="dex-section">
       <div class="section-label">DEXes to Scan</div>
-      <div id="dex-pills-grid" class="dex-grid">
-        <!-- Populated by JS -->
-      </div>
+      <div id="dex-pills-grid" class="dex-grid"></div>
     </div>
 
     <button id="start-scan-btn" class="btn-start">
@@ -169,15 +197,12 @@
 
   <!-- ── RESULTS TAB ── -->
   <section id="tab-results" class="tab-content">
-
-    <!-- Status bar -->
     <div id="scan-status-bar" class="status-bar idle">
       <span class="status-dot"></span>
       <span id="scan-status-text">Idle — press Start Scanning</span>
       <span id="scan-countdown" class="countdown hidden"></span>
     </div>
 
-    <!-- Stats -->
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-label">Opportunities</div>
@@ -197,7 +222,6 @@
       </div>
     </div>
 
-    <!-- Filter tabs -->
     <div class="filter-row">
       <div class="filter-tabs">
         <button class="filter-tab active" data-filter="all">All</button>
@@ -216,7 +240,6 @@
       <input type="text" id="search-input" class="search-box" placeholder="🔍 Search pairs, DEXes...">
     </div>
 
-    <!-- Opportunity cards -->
     <div id="opportunity-list">
       <div class="empty-state" id="results-empty">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5" opacity="0.4"/><path d="M12 8v4l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/></svg>
@@ -234,32 +257,21 @@
       </div>
       <button id="clear-history-btn" class="btn-secondary">Clear</button>
     </div>
-
-    <!-- History stats -->
     <div class="stats-grid" style="margin-bottom:16px">
       <div class="stat-card"><div class="stat-label">Total Trades</div><div class="stat-value" id="hist-total">0</div></div>
       <div class="stat-card"><div class="stat-label">Successful</div><div class="stat-value green" id="hist-success">0</div></div>
       <div class="stat-card"><div class="stat-label">Failed</div><div class="stat-value red" id="hist-failed">0</div></div>
       <div class="stat-card"><div class="stat-label">Total Profit</div><div class="stat-value gold" id="hist-total-profit">$0</div></div>
     </div>
-
     <div class="table-wrapper">
       <table id="history-table">
         <thead>
           <tr>
-            <th>Time</th>
-            <th>Pair</th>
-            <th>Buy DEX</th>
-            <th>Sell DEX</th>
-            <th>Buy Price</th>
-            <th>Sell Price</th>
-            <th>Spread</th>
-            <th>Loan Asset</th>
-            <th>Gross Profit</th>
-            <th>Fees</th>
-            <th>Net Profit</th>
-            <th>Tx Hash</th>
-            <th>Status</th>
+            <th>Time</th><th>Pair</th><th>Network</th>
+            <th>Buy DEX</th><th>Sell DEX</th>
+            <th>Spread</th><th>Loan Asset</th><th>Provider</th>
+            <th>Gross</th><th>Fees</th><th>Net</th>
+            <th>Tx Hash</th><th>Status</th>
           </tr>
         </thead>
         <tbody id="history-tbody">
@@ -279,25 +291,21 @@
       <button id="clear-logs-btn" class="btn-secondary">Clear</button>
     </div>
     <div id="logs-container">
-      <div class="log-entry info">[INFO] ArbPulse initialised. Select network and configure scanner.</div>
+      <div class="log-entry info">[INFO] ArbPulse initialised. Select network and mode, then start scanning.</div>
     </div>
   </section>
 
 </main>
 
-<!-- ─── EXECUTE MODAL ─────────────────────────────────────────── -->
+<!-- ─── EXECUTE MODAL ─────────────────────────────────────────────────── -->
 <div id="execute-modal" class="modal-overlay hidden">
   <div class="modal">
     <div class="modal-header">
       <span class="modal-title">Execute: <span id="modal-pair-name"></span></span>
       <button class="modal-close" id="modal-close-btn">✕</button>
     </div>
-    <div class="modal-body" id="modal-body">
-      <!-- Content injected by JS -->
-    </div>
-    <div id="modal-execution-steps" class="exec-steps hidden">
-      <!-- Steps injected by JS -->
-    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div id="modal-execution-steps" class="exec-steps hidden"></div>
     <div class="modal-footer" id="modal-footer">
       <button id="modal-confirm-btn" class="btn-execute">⚡ Confirm Execution</button>
       <button id="modal-cancel-btn" class="btn-secondary">Cancel</button>
@@ -305,7 +313,6 @@
   </div>
 </div>
 
-<!-- Scripts -->
 <script src="js/config.js"></script>
 <script src="js/wallet.js"></script>
 <script src="js/scanner-api.js"></script>
