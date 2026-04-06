@@ -1,0 +1,70 @@
+services:
+  - type: web
+    name: arbpulse
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 1 --timeout 300 --bind 0.0.0.0:$PORT
+    plan: free
+    envVars:
+      - key: FLASK_ENV
+        value: production
+
+      # ── BSC ──────────────────────────────────────────────────────────────
+      - key: BSC_RPC_URL
+        sync: false          # e.g. https://bsc-dataseed1.binance.org/
+      - key: BSC_TESTNET_RPC_URL
+        sync: false          # e.g. https://data-seed-prebsc-1-s1.binance.org:8545/
+      - key: BSC_CONTRACT_ADDRESS
+        sync: false          # Deployed ArbPulseFlashArb.sol on BSC mainnet
+      - key: BSC_TESTNET_CONTRACT_ADDRESS
+        sync: false          # Deployed ArbPulseFlashArb.sol on BSC testnet
+
+      # ── Ethereum ─────────────────────────────────────────────────────────
+      - key: ETH_RPC_URL
+        sync: false          # e.g. https://eth.llamarpc.com
+      - key: ETH_TESTNET_RPC_URL
+        sync: false          # e.g. https://rpc.sepolia.org
+      - key: ETH_CONTRACT_ADDRESS
+        sync: false          # Deployed ArbPulseFlashArbEVM.sol on Ethereum mainnet
+      - key: ETH_TESTNET_CONTRACT_ADDRESS
+        sync: false          # Deployed ArbPulseFlashArbEVM.sol on Sepolia
+
+      # ── Arbitrum ──────────────────────────────────────────────────────────
+      - key: ARB_RPC_URL
+        sync: false          # e.g. https://arb1.arbitrum.io/rpc
+      - key: ARB_TESTNET_RPC_URL
+        sync: false          # e.g. https://sepolia-rollup.arbitrum.io/rpc
+      - key: ARB_CONTRACT_ADDRESS
+        sync: false          # Deployed ArbPulseFlashArbEVM.sol on Arbitrum One
+      - key: ARB_TESTNET_CONTRACT_ADDRESS
+        sync: false          # Deployed ArbPulseFlashArbEVM.sol on Arb Sepolia
+
+      # ── Base ──────────────────────────────────────────────────────────────
+      - key: BASE_RPC_URL
+        sync: false          # e.g. https://mainnet.base.org
+      - key: BASE_TESTNET_RPC_URL
+        sync: false          # e.g. https://sepolia.base.org
+      - key: BASE_CONTRACT_ADDRESS
+        sync: false          # Deployed ArbPulseFlashArbEVM.sol on Base mainnet
+      - key: BASE_TESTNET_CONTRACT_ADDRESS
+        sync: false          # Deployed ArbPulseFlashArbEVM.sol on Base Sepolia
+
+      # ── Solana ────────────────────────────────────────────────────────────
+      - key: SOLANA_RPC_URL
+        sync: false          # e.g. https://api.mainnet-beta.solana.com
+      - key: SOLANA_DEVNET_RPC_URL
+        sync: false          # e.g. https://api.devnet.solana.com
+      - key: SOLANA_CONTRACT_ADDRESS
+        sync: false          # Deployed ArbPulse program ID on Solana mainnet
+      - key: SOLANA_DEVNET_CONTRACT_ADDRESS
+        sync: false          # Deployed ArbPulse program ID on Solana devnet
+
+    staticPublishPath: ../frontend
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
