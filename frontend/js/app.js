@@ -1,18 +1,18 @@
 /**
  * ArbPulse — Main Application
- * Wires all modules together and handles UI interactions.
+ * Wires all modules together. Manages 5 networks × mainnet/testnet.
  */
 
 // ─── Logger ──────────────────────────────────────────────────────────────────
 const AppLog = (() => {
   function _append(msg, cls) {
-    const container = document.getElementById('logs-container');
-    if (!container) return;
+    const c = document.getElementById('logs-container');
+    if (!c) return;
     const el = document.createElement('div');
     el.className = `log-entry ${cls}`;
     el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-    container.appendChild(el);
-    container.scrollTop = container.scrollHeight;
+    c.appendChild(el);
+    c.scrollTop = c.scrollHeight;
   }
   return {
     info:   m => _append(m, 'info'),
@@ -27,32 +27,58 @@ const AppLog = (() => {
 // ─── App Init ─────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
 
-  let _activeNetwork = 'bsc';
+  // ── Testnet/Mainnet toggle ────────────────────────────────────────────────
+  const testnetToggle = document.getElementById('testnet-toggle');
+  const testnetBanner = document.getElementById('testnet-banner');
+
+  function applyNetworkMode() {
+    const isTestnet = AppState.isTestnet;
+    document.body.classList.toggle('testnet-active', isTestnet);
+    if (testnetBanner) testnetBanner.classList.toggle('hidden', !isTestnet);
+    _updateScannerModeIndicator();
+    _populateNetworkUI(AppState.network);
+    AppLog.info(
+      isTestnet
+        ? `⚠ Switched to TESTNET mode — ${activeCfg().name}`
+        : `✓ Switched to MAINNET mode — ${activeCfg().name}`
+    );
+    if (ScannerAPI.isScanning()) ScannerAPI.stopScanning();
+  }
+
+  testnetToggle?.addEventListener('change', () => {
+    AppState.isTestnet = testnetToggle.checked;
+    WalletManager.setNetwork(AppState.network); // refresh wallet UI chain switch
+    applyNetworkMode();
+  });
 
   // ── Network switching ─────────────────────────────────────────────────────
   document.querySelectorAll('.network-pill').forEach(pill => {
     pill.addEventListener('click', () => {
       document.querySelectorAll('.network-pill').forEach(p => p.classList.remove('active'));
       pill.classList.add('active');
-      _activeNetwork = pill.dataset.network;
-      // Tell WalletManager which network is active — does NOT disconnect any wallet
-      WalletManager.setNetwork(_activeNetwork);
-      _populateNetworkUI(_activeNetwork);
-      AppLog.info(`Switched to ${_activeNetwork === 'bsc' ? 'BNB Chain' : 'Solana'} — wallet state preserved on both networks`);
+      AppState.network = pill.dataset.network;
+      WalletManager.setNetwork(AppState.network);
+      _populateNetworkUI(AppState.network);
+      _updateScannerModeIndicator();
+      const cfg = activeCfg();
+      AppLog.info(`Switched to ${cfg.name}${AppState.isTestnet ? ' (Testnet)' : ''}`);
       if (ScannerAPI.isScanning()) ScannerAPI.stopScanning();
     });
   });
 
-  function _populateNetworkUI(network) {
-    const cfg = NETWORK_CONFIG[network];
+  function _updateScannerModeIndicator() {
+    const cfg      = activeCfg();
+    const indicator= document.getElementById('scanner-mode-indicator');
+    const text     = document.getElementById('scanner-mode-text');
+    if (!indicator || !text) return;
+    const mode = AppState.isTestnet ? 'Testnet' : 'Mainnet';
+    text.textContent = `${cfg.name} · ${mode}`;
+    indicator.classList.toggle('testnet', AppState.isTestnet);
+    indicator.classList.toggle('mainnet', !AppState.isTestnet);
+  }
 
-    // Flash loan providers
-    const providerSelect = document.getElementById('cfg-flash-provider');
-    if (providerSelect) {
-      providerSelect.innerHTML = cfg.flashProviders.map(p =>
-        `<option value="${p.value}">${p.label}</option>`
-      ).join('');
-    }
+  function _populateNetworkUI(network) {
+    const cfg = activeCfg(); // uses AppState.isTestnet
 
     // Base tokens
     const tokenGrid = document.getElementById('base-tokens-grid');
@@ -62,9 +88,9 @@ document.addEventListener('DOMContentLoaded', () => {
           ${t.symbol} <span class="flash-icon">⚡</span>
         </button>
       `).join('');
-      tokenGrid.querySelectorAll('.token-pill').forEach(pill => {
-        pill.addEventListener('click', () => pill.classList.toggle('inactive'));
-      });
+      tokenGrid.querySelectorAll('.token-pill').forEach(p =>
+        p.addEventListener('click', () => p.classList.toggle('inactive'))
+      );
     }
 
     // DEXes
@@ -73,14 +99,15 @@ document.addEventListener('DOMContentLoaded', () => {
       dexGrid.innerHTML = cfg.dexes.map(d => `
         <button class="dex-pill" data-dex="${d}">${d}</button>
       `).join('');
-      dexGrid.querySelectorAll('.dex-pill').forEach(pill => {
-        pill.addEventListener('click', () => pill.classList.toggle('inactive'));
-      });
+      dexGrid.querySelectorAll('.dex-pill').forEach(p =>
+        p.addEventListener('click', () => p.classList.toggle('inactive'))
+      );
     }
   }
 
-  // Init with BSC
+  // Init with BSC mainnet
   _populateNetworkUI('bsc');
+  _updateScannerModeIndicator();
 
   // ── Tab navigation ────────────────────────────────────────────────────────
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -90,8 +117,6 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.classList.add('active');
       const tab = document.getElementById(`tab-${btn.dataset.tab}`);
       if (tab) tab.classList.add('active');
-
-      // Load history from backend when switching to history tab
       if (btn.dataset.tab === 'history') {
         ScannerAPI.fetchHistory().then(h => HistoryManager.setHistory(h)).catch(() => {});
       }
@@ -101,15 +126,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Wallet ────────────────────────────────────────────────────────────────
   document.getElementById('connect-wallet-btn')?.addEventListener('click', () => WalletManager.openPicker());
   document.getElementById('disconnect-btn')?.addEventListener('click',     () => WalletManager.disconnect());
-  document.getElementById('wallet-picker-close')?.addEventListener('click', () => WalletManager.closePicker());
+  document.getElementById('wallet-picker-close')?.addEventListener('click',() => WalletManager.closePicker());
 
   // ── Scanner controls ──────────────────────────────────────────────────────
-  document.getElementById('start-scan-btn')?.addEventListener('click', () => {
-    ScannerAPI.startScanning();
-  });
-  document.getElementById('stop-scan-btn')?.addEventListener('click', () => {
-    ScannerAPI.stopScanning();
-  });
+  document.getElementById('start-scan-btn')?.addEventListener('click', () => ScannerAPI.startScanning());
+  document.getElementById('stop-scan-btn')?.addEventListener('click',  () => ScannerAPI.stopScanning());
 
   ScannerAPI.onStart(() => {
     document.getElementById('start-scan-btn')?.classList.add('hidden');
@@ -119,7 +140,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     document.querySelector('[data-tab="results"]')?.classList.add('active');
     document.getElementById('tab-results')?.classList.add('active');
-    // Status bar
     const bar = document.getElementById('scan-status-bar');
     const txt = document.getElementById('scan-status-text');
     if (bar) bar.className = 'status-bar scanning';
@@ -139,7 +159,8 @@ document.addEventListener('DOMContentLoaded', () => {
   ScannerAPI.onResults(data => {
     ResultsManager.update(data);
     const txt = document.getElementById('scan-status-text');
-    if (txt) txt.textContent = `${data.profitable} profitable · next in ${document.getElementById('cfg-interval')?.value || 45}s`;
+    const interval = document.getElementById('cfg-interval')?.value || 30;
+    if (txt) txt.textContent = `${data.profitable} profitable · next in ${interval}s`;
   });
 
   ScannerAPI.onError(msg => {
@@ -158,13 +179,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  document.getElementById('sort-select')?.addEventListener('change', e => {
-    ResultsManager.setSort(e.target.value);
-  });
-
-  document.getElementById('search-input')?.addEventListener('input', e => {
-    ResultsManager.setSearch(e.target.value);
-  });
+  document.getElementById('sort-select')?.addEventListener('change', e => ResultsManager.setSort(e.target.value));
+  document.getElementById('search-input')?.addEventListener('input', e => ResultsManager.setSearch(e.target.value));
 
   // ── History ───────────────────────────────────────────────────────────────
   document.getElementById('clear-history-btn')?.addEventListener('click', async () => {
@@ -181,15 +197,14 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ── Modal close ───────────────────────────────────────────────────────────
-  document.getElementById('modal-close-btn')?.addEventListener('click', () => {
-    document.getElementById('execute-modal')?.classList.add('hidden');
-  });
+  document.getElementById('modal-close-btn')?.addEventListener('click', () =>
+    document.getElementById('execute-modal')?.classList.add('hidden')
+  );
   document.getElementById('execute-modal')?.addEventListener('click', e => {
     if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
   });
 
   // ── Fetch backend config on load ──────────────────────────────────────────
   ScannerAPI.fetchConfig();
-
-  AppLog.info('ArbPulse initialised. Select network, configure scanner, connect wallet.');
+  AppLog.info('ArbPulse initialised. Select network, toggle mainnet/testnet, then start scanning.');
 });

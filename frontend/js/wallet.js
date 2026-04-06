@@ -1,37 +1,41 @@
 /**
  * ArbPulse — Wallet Manager
- * Per-network wallet state: switching networks NEVER disconnects another network's wallet.
- * BSC: MetaMask, Trust Wallet, Binance Wallet, WalletConnect
- * Solana: Phantom, Solflare, Backpack, Coinbase Wallet
+ * Per-network wallet state: 5 networks, mainnet/testnet aware chain switching.
  */
 
 const WalletManager = (() => {
-  // Each network maintains its own independent wallet connection
   const _state = {
     bsc:    { connected: false, address: '', walletName: '', provider: null },
+    eth:    { connected: false, address: '', walletName: '', provider: null },
+    arb:    { connected: false, address: '', walletName: '', provider: null },
+    base:   { connected: false, address: '', walletName: '', provider: null },
     solana: { connected: false, address: '', walletName: '', provider: null },
   };
 
-  let _activeNetwork = 'bsc';
+  let _activeNetwork     = 'bsc';
   let _onChangeCallbacks = [];
 
-  // ─── Wallet options per network ──────────────────────────────────────────
   const WALLET_OPTIONS = {
-    bsc: [
-      { id: 'metamask',     name: 'MetaMask',       desc: 'Most popular EVM wallet',           icon: '🦊',  detected: () => !!window.ethereum?.isMetaMask },
-      { id: 'trust',        name: 'Trust Wallet',   desc: 'Mobile-first multichain wallet',    icon: '🛡️', detected: () => !!window.ethereum?.isTrust },
-      { id: 'binance',      name: 'Binance Wallet', desc: 'Official Binance Web3 wallet',      icon: '⬡',   detected: () => !!window.BinanceChain },
-      { id: 'walletconnect',name: 'WalletConnect',  desc: 'Connect any mobile wallet via QR',  icon: '🔗',  detected: () => false },
+    evm: [
+      { id: 'metamask',      name: 'MetaMask',       desc: 'Most popular EVM wallet',           icon: '🦊',  detected: () => !!window.ethereum?.isMetaMask },
+      { id: 'trust',         name: 'Trust Wallet',   desc: 'Mobile-first multichain wallet',    icon: '🛡️', detected: () => !!window.ethereum?.isTrust },
+      { id: 'binance',       name: 'Binance Wallet', desc: 'Official Binance Web3 wallet',      icon: '⬡',   detected: () => !!window.BinanceChain },
+      { id: 'coinbase',      name: 'Coinbase Wallet',desc: 'Easy onboarding Web3 wallet',       icon: '🔵',  detected: () => !!window.coinbaseWalletExtension },
+      { id: 'walletconnect', name: 'WalletConnect',  desc: 'Connect any mobile wallet via QR',  icon: '🔗',  detected: () => false },
     ],
     solana: [
-      { id: 'phantom',  name: 'Phantom',         desc: 'Most popular Solana wallet',        icon: '👻', detected: () => !!window.solana?.isPhantom },
-      { id: 'solflare', name: 'Solflare',         desc: 'Feature-rich Solana wallet',        icon: '☀️', detected: () => !!window.solflare },
-      { id: 'backpack', name: 'Backpack',          desc: 'Multi-chain xNFT wallet',           icon: '🎒', detected: () => !!window.xnft },
-      { id: 'coinbase', name: 'Coinbase Wallet',   desc: 'Easy onboarding Web3 wallet',       icon: '🔵', detected: () => !!window.coinbaseWalletExtension },
+      { id: 'phantom',   name: 'Phantom',       desc: 'Most popular Solana wallet',   icon: '👻', detected: () => !!window.solana?.isPhantom },
+      { id: 'solflare',  name: 'Solflare',       desc: 'Feature-rich Solana wallet',   icon: '☀️', detected: () => !!window.solflare },
+      { id: 'backpack',  name: 'Backpack',        desc: 'Multi-chain xNFT wallet',      icon: '🎒', detected: () => !!window.xnft },
+      { id: 'coinbase',  name: 'Coinbase Wallet', desc: 'Easy onboarding Web3 wallet',  icon: '🔵', detected: () => !!window.coinbaseWalletExtension },
     ],
   };
 
-  // ─── Public API ───────────────────────────────────────────────────────────
+  // Which wallet type each network uses
+  function _walletType(network) {
+    return network === 'solana' ? 'solana' : 'evm';
+  }
+
   function onWalletChange(cb) { _onChangeCallbacks.push(cb); }
   function getAddress()       { return _state[_activeNetwork].address; }
   function isConnected()      { return _state[_activeNetwork].connected; }
@@ -40,24 +44,25 @@ const WalletManager = (() => {
 
   function setNetwork(network) {
     _activeNetwork = network;
-    // Restore wallet UI for the newly active network without touching the other
     _updateUI();
     _emit();
   }
 
   // ─── Open wallet picker ────────────────────────────────────────────────
   function openPicker() {
-    const modal       = document.getElementById('wallet-picker-modal');
-    const titleEl     = document.getElementById('wallet-picker-title');
-    const netLabelEl  = document.getElementById('wallet-picker-network-label');
-    const listEl      = document.getElementById('wallet-picker-list');
+    const modal      = document.getElementById('wallet-picker-modal');
+    const titleEl    = document.getElementById('wallet-picker-title');
+    const netLabelEl = document.getElementById('wallet-picker-network-label');
+    const listEl     = document.getElementById('wallet-picker-list');
     if (!modal) return;
 
-    const netName = _activeNetwork === 'bsc' ? 'BNB Chain' : 'Solana';
-    titleEl.textContent    = `Connect to ${netName}`;
-    netLabelEl.textContent = _activeNetwork === 'bsc' ? 'EVM Wallets' : 'Solana Wallets';
+    const cfg    = activeCfg();
+    const type   = _walletType(_activeNetwork);
+    const wallets= WALLET_OPTIONS[type];
 
-    const wallets = WALLET_OPTIONS[_activeNetwork];
+    titleEl.textContent    = `Connect to ${cfg.name}`;
+    netLabelEl.textContent = type === 'evm' ? 'EVM Wallets' : 'Solana Wallets';
+
     listEl.innerHTML = wallets.map(w => {
       const det = w.detected();
       return `
@@ -71,33 +76,27 @@ const WalletManager = (() => {
         </div>`;
     }).join('');
 
-    // Attach click handlers
     listEl.querySelectorAll('.wallet-option').forEach(el => {
       el.addEventListener('click', () => {
-        const walletId   = el.dataset.walletId;
-        const walletName = el.dataset.walletName;
         closePicker();
-        _connectWallet(walletId, walletName);
+        _connectWallet(el.dataset.walletId, el.dataset.walletName);
       });
     });
 
     modal.classList.remove('hidden');
-
-    // Close on backdrop click
     modal.onclick = (e) => { if (e.target === modal) closePicker(); };
   }
 
   function closePicker() {
-    const modal = document.getElementById('wallet-picker-modal');
-    if (modal) modal.classList.add('hidden');
+    document.getElementById('wallet-picker-modal')?.classList.add('hidden');
   }
 
   // ─── Connect ──────────────────────────────────────────────────────────
   async function _connectWallet(walletId, walletName) {
-    if (_activeNetwork === 'bsc') {
-      await _connectEVM(walletId, walletName);
-    } else {
+    if (_walletType(_activeNetwork) === 'solana') {
       await _connectSolana(walletId, walletName);
+    } else {
+      await _connectEVM(walletId, walletName);
     }
   }
 
@@ -111,41 +110,42 @@ const WalletManager = (() => {
       const accounts = await provider.request({ method: 'eth_requestAccounts' });
       if (!accounts.length) throw new Error('No accounts returned');
 
-      // Switch to BSC (chainId 56)
+      // Switch to the correct chain based on network + testnet toggle
+      const cfg = activeCfg();
       try {
         await provider.request({
           method: 'wallet_switchEthereumChain',
-          params: [{ chainId: '0x38' }],
+          params: [{ chainId: cfg.chainIdHex }],
         });
       } catch (switchErr) {
         if (switchErr.code === 4902) {
           await provider.request({
             method: 'wallet_addEthereumChain',
             params: [{
-              chainId: '0x38',
-              chainName: 'BNB Smart Chain',
-              nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
-              rpcUrls: ['https://bsc-dataseed1.binance.org/'],
-              blockExplorerUrls: ['https://bscscan.com'],
+              chainId:           cfg.chainIdHex,
+              chainName:         cfg.name,
+              nativeCurrency:    cfg.nativeCurrency,
+              rpcUrls:           cfg.rpcUrls,
+              blockExplorerUrls: cfg.blockExplorerUrls,
             }],
           });
         }
       }
 
-      _state.bsc.connected   = true;
-      _state.bsc.address     = accounts[0];
-      _state.bsc.walletName  = walletName;
-      _state.bsc.provider    = provider;
+      _state[_activeNetwork].connected  = true;
+      _state[_activeNetwork].address    = accounts[0];
+      _state[_activeNetwork].walletName = walletName;
+      _state[_activeNetwork].provider   = provider;
 
       provider.on('accountsChanged', (accs) => {
-        _state.bsc.connected = accs.length > 0;
-        _state.bsc.address   = accs[0] || '';
-        if (_activeNetwork === 'bsc') { _updateUI(); _emit(); }
+        _state[_activeNetwork].connected = accs.length > 0;
+        _state[_activeNetwork].address   = accs[0] || '';
+        _updateUI(); _emit();
       });
       provider.on('chainChanged', () => window.location.reload());
 
       _updateUI(); _emit();
-      AppLog.info(`${walletName} connected on BNB Chain: ${_fmtAddr(accounts[0])}`);
+      AppLog.info(`${walletName} connected on ${cfg.name}: ${_fmtAddr(accounts[0])}`);
     } catch (e) {
       AppLog.error(`${walletName} connection failed: ${e.message}`);
       _showError(e.message);
@@ -153,30 +153,25 @@ const WalletManager = (() => {
   }
 
   async function _connectSolana(walletId, walletName) {
-    const solWallet = walletId === 'phantom'  ? window.phantom?.solana || window.solana
-                    : walletId === 'solflare' ? window.solflare
-                    : walletId === 'backpack' ? window.xnft?.solana
-                    : null;
+    const solWallet =
+      walletId === 'phantom'  ? (window.phantom?.solana || window.solana)
+    : walletId === 'solflare' ? window.solflare
+    : walletId === 'backpack' ? window.xnft?.solana
+    : null;
 
-    if (!solWallet) {
-      _showError(`${walletName} not detected. Please install it and refresh.`);
-      return;
-    }
+    if (!solWallet) { _showError(`${walletName} not detected. Please install it and refresh.`); return; }
     try {
-      const resp = await solWallet.connect();
+      const resp    = await solWallet.connect();
       const address = resp.publicKey.toString();
-
       _state.solana.connected  = true;
       _state.solana.address    = address;
       _state.solana.walletName = walletName;
       _state.solana.provider   = solWallet;
-
       solWallet.on('disconnect', () => {
         _state.solana.connected = false;
         _state.solana.address   = '';
         if (_activeNetwork === 'solana') { _updateUI(); _emit(); }
       });
-
       _updateUI(); _emit();
       AppLog.info(`${walletName} connected on Solana: ${_fmtAddr(address)}`);
     } catch (e) {
@@ -187,42 +182,37 @@ const WalletManager = (() => {
 
   // ─── Disconnect ───────────────────────────────────────────────────────
   async function disconnect() {
-    const net = _activeNetwork;
+    const net  = _activeNetwork;
     const name = _state[net].walletName;
-
     if (net === 'solana' && _state.solana.provider) {
       try { await _state.solana.provider.disconnect(); } catch {}
     }
-
-    _state[net].connected  = false;
-    _state[net].address    = '';
-    _state[net].walletName = '';
-    _state[net].provider   = null;
-
+    _state[net] = { connected: false, address: '', walletName: '', provider: null };
     _updateUI(); _emit();
-    AppLog.info(`${name} disconnected from ${net === 'bsc' ? 'BNB Chain' : 'Solana'}.`);
+    const cfg = activeCfg();
+    AppLog.info(`${name} disconnected from ${cfg.name}.`);
   }
 
   // ─── UI update ────────────────────────────────────────────────────────
   function _updateUI() {
     const ws = _state[_activeNetwork];
-    const connectBtn  = document.getElementById('connect-wallet-btn');
-    const connectedDiv= document.getElementById('wallet-connected');
-    const addrSpan    = document.getElementById('wallet-address');
-    const iconImg     = document.getElementById('wallet-icon');
+    const connectBtn   = document.getElementById('connect-wallet-btn');
+    const connectedDiv = document.getElementById('wallet-connected');
+    const addrSpan     = document.getElementById('wallet-address');
+    const iconImg      = document.getElementById('wallet-icon');
 
     if (ws.connected) {
-      if (connectBtn)   connectBtn.classList.add('hidden');
-      if (connectedDiv) connectedDiv.classList.remove('hidden');
-      if (addrSpan)     addrSpan.textContent = _fmtAddr(ws.address);
-      if (iconImg)      iconImg.src = _walletIconSrc(ws.walletName);
+      connectBtn?.classList.add('hidden');
+      connectedDiv?.classList.remove('hidden');
+      if (addrSpan) addrSpan.textContent = _fmtAddr(ws.address);
+      if (iconImg)  iconImg.src = _walletIconSrc(ws.walletName);
     } else {
-      if (connectBtn)   connectBtn.classList.remove('hidden');
-      if (connectedDiv) connectedDiv.classList.add('hidden');
+      connectBtn?.classList.remove('hidden');
+      connectedDiv?.classList.add('hidden');
     }
 
-    // Update the green connected-dot indicator on each network pill
-    ['bsc', 'solana'].forEach(net => {
+    // Green dot on each network pill
+    ['bsc','eth','arb','base','solana'].forEach(net => {
       const pill = document.getElementById(`net-pill-${net}`);
       const dot  = document.getElementById(`net-ci-${net}`);
       if (pill) pill.classList.toggle('wallet-connected-on', _state[net].connected);
@@ -230,29 +220,36 @@ const WalletManager = (() => {
     });
   }
 
-  // ─── Helpers ──────────────────────────────────────────────────────────
   function _emit() {
     _onChangeCallbacks.forEach(cb => cb({
-      address: _state[_activeNetwork].address,
-      network: _activeNetwork,
+      address:   _state[_activeNetwork].address,
+      network:   _activeNetwork,
       connected: _state[_activeNetwork].connected,
     }));
   }
 
   function _fmtAddr(addr) {
     if (!addr) return '';
-    return addr.slice(0, 6) + '...' + addr.slice(-4);
+    return addr.length > 20 ? addr.slice(0,6) + '...' + addr.slice(-4) : addr;
   }
 
   function _walletIconSrc(name) {
     const icons = {
-      'MetaMask':       'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><circle cx="48" cy="48" r="48" fill="#e8831d"/><text x="48" y="62" text-anchor="middle" fill="white" font-size="36">🦊</text></svg>'),
-      'Phantom':        'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><circle cx="48" cy="48" r="48" fill="#ab9ff2"/><text x="48" y="62" text-anchor="middle" font-size="36">👻</text></svg>'),
-      'Solflare':       'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><circle cx="48" cy="48" r="48" fill="#fc9965"/><text x="48" y="62" text-anchor="middle" font-size="36">☀️</text></svg>'),
-      'Trust Wallet':   'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><circle cx="48" cy="48" r="48" fill="#3375bb"/><text x="48" y="62" text-anchor="middle" font-size="36">🛡️</text></svg>'),
-      'Binance Wallet': 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><circle cx="48" cy="48" r="48" fill="#f0b90b"/><text x="48" y="62" text-anchor="middle" font-size="30" fill="#000">⬡</text></svg>'),
+      'MetaMask':       _svgIcon('#e8831d', '🦊'),
+      'Phantom':        _svgIcon('#ab9ff2', '👻'),
+      'Solflare':       _svgIcon('#fc9965', '☀️'),
+      'Trust Wallet':   _svgIcon('#3375bb', '🛡️'),
+      'Binance Wallet': _svgIcon('#f0b90b', '⬡'),
+      'Coinbase Wallet':_svgIcon('#0052ff', '🔵'),
+      'Backpack':       _svgIcon('#e33e3f', '🎒'),
     };
     return icons[name] || icons['MetaMask'];
+  }
+
+  function _svgIcon(bg, emoji) {
+    return 'data:image/svg+xml,' + encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><circle cx="48" cy="48" r="48" fill="${bg}"/><text x="48" y="62" text-anchor="middle" font-size="36">${emoji}</text></svg>`
+    );
   }
 
   function _showError(msg) {
@@ -263,15 +260,5 @@ const WalletManager = (() => {
     setTimeout(() => toast.remove(), 4000);
   }
 
-  return {
-    openPicker,
-    closePicker,
-    disconnect,
-    setNetwork,
-    getAddress,
-    isConnected,
-    getNetwork,
-    getWalletName,
-    onWalletChange,
-  };
+  return { openPicker, closePicker, disconnect, setNetwork, getAddress, isConnected, getNetwork, getWalletName, onWalletChange };
 })();

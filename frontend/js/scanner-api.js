@@ -1,17 +1,15 @@
 /**
  * ArbPulse — Scanner API
- * Communicates with the Flask backend to scan DEXes and execute trades.
+ * Communicates with the Flask backend. Flash provider is chosen automatically by backend.
  */
 
 const ScannerAPI = (() => {
-  const BASE = '';  // same origin; in dev set to 'http://localhost:5000'
+  const BASE = '';
 
-  let _scanInterval = null;
-  let _isScanning = false;
-  let _countdownInterval = null;
-  let _contractAddress = '';
-
-  // Callbacks
+  let _scanInterval     = null;
+  let _isScanning       = false;
+  let _countdownInterval= null;
+  let _contractAddress  = '';
   let _onResults = () => {};
   let _onStart   = () => {};
   let _onStop    = () => {};
@@ -21,14 +19,13 @@ const ScannerAPI = (() => {
   function onStart(cb)   { _onStart   = cb; }
   function onStop(cb)    { _onStop    = cb; }
   function onError(cb)   { _onError   = cb; }
-
-  function isScanning() { return _isScanning; }
-
+  function isScanning()  { return _isScanning; }
   function setContractAddress(addr) { _contractAddress = addr; }
 
   function buildConfig() {
-    const network = document.querySelector('.network-pill.active')?.dataset.network || 'bsc';
-    const netCfg = NETWORK_CONFIG[network];
+    const network   = AppState.network;
+    const isTestnet = AppState.isTestnet;
+    const cfg       = activeCfg();
 
     const activeBaseTokens = Array.from(
       document.querySelectorAll('.token-pill:not(.inactive)')
@@ -40,20 +37,25 @@ const ScannerAPI = (() => {
 
     return {
       network,
+      testnet: isTestnet,
       config: {
-        minNetProfitPct:  parseFloat(document.getElementById('cfg-min-profit')?.value || 0.3),
-        slippageTolerance:parseFloat(document.getElementById('cfg-slippage')?.value || 0.5),
-        minLiquidityUsd:  parseFloat(document.getElementById('cfg-min-liq')?.value || 25000),
-        flashLoanProvider:document.getElementById('cfg-flash-provider')?.value || netCfg.flashProviders[0].value,
-        baseTokens:       activeBaseTokens.length ? activeBaseTokens : netCfg.baseTokens.map(t => t.symbol),
-        dexes:            activeDexes.length ? activeDexes : netCfg.dexes,
+        minNetProfitPct:   parseFloat(document.getElementById('cfg-min-profit')?.value  || 0.10),
+        slippageTolerance: parseFloat(document.getElementById('cfg-slippage')?.value    || 1.00),
+        minLiquidityUsd:   parseFloat(document.getElementById('cfg-min-liq')?.value     || 2000),
+        // No flashLoanProvider — backend auto-selects cheapest with reserves
+        baseTokens: activeBaseTokens.length ? activeBaseTokens : cfg.baseTokens.map(t => t.symbol),
+        dexes:      activeDexes.length      ? activeDexes      : cfg.dexes,
       },
     };
   }
 
   async function runScan() {
     const payload = buildConfig();
-    AppLog.scan(`Scanning ${payload.network.toUpperCase()} — ${payload.config.dexes.length} DEXes, ${payload.config.baseTokens.length} base tokens...`);
+    const mode    = payload.testnet ? 'TESTNET' : 'MAINNET';
+    AppLog.scan(
+      `Scanning ${payload.network.toUpperCase()} [${mode}] — ` +
+      `${payload.config.dexes.length} DEXes, ${payload.config.baseTokens.length} base tokens…`
+    );
 
     try {
       const resp = await fetch(`${BASE}/api/scan`, {
@@ -63,11 +65,10 @@ const ScannerAPI = (() => {
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
-
       if (data.error) throw new Error(data.error);
 
       AppLog.profit(
-        `Scan complete — ${data.total} opportunities, ${data.profitable} profitable. ` +
+        `Scan complete — ${data.total} opps, ${data.profitable} profitable. ` +
         `Best: ${formatUsd(data.best_profit_usd)}. Avg spread: ${formatPercent(data.avg_spread)}`
       );
       _onResults(data);
@@ -81,15 +82,11 @@ const ScannerAPI = (() => {
     if (_isScanning) return;
     _isScanning = true;
     _onStart();
-
-    // Immediate first scan
     runScan();
 
-    // Recurring scans
-    const intervalSec = parseInt(document.getElementById('cfg-interval')?.value || 45);
+    const intervalSec = parseInt(document.getElementById('cfg-interval')?.value || 30);
     _scanInterval = setInterval(runScan, intervalSec * 1000);
 
-    // Countdown timer
     let remaining = intervalSec;
     const countdownEl = document.getElementById('scan-countdown');
     if (countdownEl) {
@@ -108,8 +105,7 @@ const ScannerAPI = (() => {
     _isScanning = false;
     clearInterval(_scanInterval);
     clearInterval(_countdownInterval);
-    _scanInterval = null;
-    _countdownInterval = null;
+    _scanInterval = _countdownInterval = null;
     const countdownEl = document.getElementById('scan-countdown');
     if (countdownEl) countdownEl.classList.add('hidden');
     _onStop();
@@ -118,22 +114,20 @@ const ScannerAPI = (() => {
 
   async function executeTrade(opportunity) {
     const walletAddress = WalletManager.getAddress();
-    if (!walletAddress) {
-      throw new Error('Wallet not connected');
-    }
+    if (!walletAddress) throw new Error('Wallet not connected');
+
     const contractAddr = document.getElementById('cfg-contract')?.value?.trim() || _contractAddress;
-    if (!contractAddr) {
-      throw new Error('Smart contract address not set. Enter it in Scanner Config.');
-    }
+    if (!contractAddr) throw new Error('Smart contract address not set. Enter it in Scanner Config.');
 
-    const network = document.querySelector('.network-pill.active')?.dataset.network || 'bsc';
+    const network   = AppState.network;
+    const isTestnet = AppState.isTestnet;
 
-    AppLog.exec(`Building flash loan tx for ${opportunity.pair} (${opportunity.buyDex} → ${opportunity.sellDex})...`);
+    AppLog.exec(`Building flash loan tx for ${opportunity.pair} (${opportunity.buyDex} → ${opportunity.sellDex})…`);
 
     const resp = await fetch(`${BASE}/api/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ network, opportunity, wallet: walletAddress, contractAddress: contractAddr }),
+      body: JSON.stringify({ network, testnet: isTestnet, opportunity, wallet: walletAddress, contractAddress: contractAddr }),
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
@@ -143,11 +137,7 @@ const ScannerAPI = (() => {
 
   async function sendTransactionEVM(unsignedTx) {
     if (!window.ethereum) throw new Error('MetaMask not available');
-    const txHash = await window.ethereum.request({
-      method: 'eth_sendTransaction',
-      params: [unsignedTx],
-    });
-    return txHash;
+    return await window.ethereum.request({ method: 'eth_sendTransaction', params: [unsignedTx] });
   }
 
   async function fetchHistory() {
@@ -164,9 +154,11 @@ const ScannerAPI = (() => {
     try {
       const resp = await fetch(`${BASE}/api/config`);
       const data = await resp.json();
-      if (data.bscContractAddress) {
-        const input = document.getElementById('cfg-contract');
-        if (input && !input.value) input.value = data.bscContractAddress;
+      // Fill contract address from env if not already set
+      const input = document.getElementById('cfg-contract');
+      if (input && !input.value) {
+        const addr = data[`${AppState.network}ContractAddress`] || data.bscContractAddress || '';
+        if (addr) input.value = addr;
       }
     } catch {}
   }
