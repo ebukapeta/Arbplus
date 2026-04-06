@@ -46,6 +46,8 @@ DEX_CONFIGS = {
     'PancakeSwap V3': {'factory':'0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865','router':'0x1b81D678ffb9C0263b24A97847620C99d213eB14','fee_bps':5},
     # Testnet
     'PancakeSwap V2 Testnet': {'factory':'0x6725F303b657a9451d8BA641348b6761A6CC7a17','router':'0xD99D1c33F9fC3444f8101754aBC46c52416550D1','fee_bps':25},
+    'BakerySwap Testnet':     {'factory':'0x01bF7C66c6BD861915CdaaE475042d3c4BaE16A7','router':'0xCDe540d7eAFE93aC439CeF360f775d9E69dFd93f','fee_bps':30},
+    'JulSwap Testnet':        {'factory':'0x553990F2CBA90272390f62C5BDb1681fFc899675','router':'0xbd67d157502A23309Db761c41965600c2Ec788b2','fee_bps':30},
 }
 
 # ─── Flash loan providers — ordered cheapest first ───────────────────────────
@@ -256,7 +258,7 @@ class BSCScanner:
     @property
     def _dex_configs(self):
         if self.testnet:
-            return {'PancakeSwap V2 Testnet': DEX_CONFIGS['PancakeSwap V2 Testnet']}
+            return {k: v for k, v in DEX_CONFIGS.items() if 'Testnet' in k}
         return {k: v for k, v in DEX_CONFIGS.items() if 'Testnet' not in k}
 
     def _connect(self):
