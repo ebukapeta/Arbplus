@@ -56,7 +56,11 @@ const NETWORK_CONFIG = {
         { symbol: 'ETH',  address: '0x8BaBbB98678facC7342735486C851ABd7A0d17Cc' },
         { symbol: 'CAKE', address: '0xFa60D973F7642B748046464e165A65B7323b0DEE' },
       ],
-      dexes: ['PancakeSwap V2 Testnet'],
+      dexes: [
+        'PancakeSwap V2 Testnet','PancakeSwap V3 Testnet','ApeSwap Testnet',
+        'BiSwap Testnet','MDEX Testnet','BabySwap Testnet',
+        'SushiSwap Testnet','KnightSwap Testnet','Nomiswap Testnet','BakerySwap Testnet',
+      ],
     },
   },
 
@@ -85,6 +89,7 @@ const NETWORK_CONFIG = {
       dexes: [
         'Uniswap V2','Uniswap V3','SushiSwap ETH','Shibaswap',
         'Fraxswap','PancakeSwap V3 ETH','Balancer V2',
+        'Curve ETH','DODO ETH','Kyberswap ETH',
       ],
     },
     testnet: {
@@ -107,7 +112,11 @@ const NETWORK_CONFIG = {
         { symbol: 'FRAX',  address: '0x853d955aCEf822Db058eb8505911ED77F175b99e' },
         { symbol: 'LUSD',  address: '0x5f98805A4E8be255a32880FDeC7F6728C6568bA0' },
       ],
-      dexes: ['Uniswap V2 Sepolia', 'Uniswap V3 Sepolia'],
+      dexes: [
+        'Uniswap V2 Sepolia','Uniswap V3 Sepolia','SushiSwap Sepolia',
+        'PancakeSwap V3 Sepolia','Balancer V2 Sepolia','Fraxswap Sepolia',
+        'Shibaswap Sepolia','Curve Sepolia','DODO Sepolia','Kyberswap Sepolia',
+      ],
     },
   },
 
@@ -134,6 +143,7 @@ const NETWORK_CONFIG = {
       dexes: [
         'Camelot V2','Uniswap V3 Arb','SushiSwap Arb',
         'Ramses','Trader Joe Arb','Zyberswap',
+        'PancakeSwap V3 Arb','Balancer V2 Arb',
       ],
     },
     testnet: {
@@ -154,7 +164,11 @@ const NETWORK_CONFIG = {
         { symbol: 'FRAX',  address: '0x17FC002b466eEc40DaE837Fc4bE5c67993ddBd6F' },
         { symbol: 'GMX',   address: '0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a' },
       ],
-      dexes: ['Uniswap V3 Arb Sepolia', 'Camelot V2 Testnet'],
+      dexes: [
+        'Uniswap V3 Arb Sepolia','Camelot V2 Testnet','SushiSwap Arb Sepolia',
+        'Ramses Sepolia','Trader Joe Arb Sep','Zyberswap Sepolia',
+        'PancakeSwap V3 Arb Sep','Balancer V2 Arb Sep',
+      ],
     },
   },
 
@@ -180,7 +194,7 @@ const NETWORK_CONFIG = {
       ],
       dexes: [
         'Aerodrome','BaseSwap','Uniswap V3 Base',
-        'SwapBased','AlienBase','RocketSwap','PancakeSwap V3 Base',
+        'SwapBased','AlienBase','RocketSwap','PancakeSwap V3 Base','SushiSwap Base',
       ],
     },
     testnet: {
@@ -201,7 +215,11 @@ const NETWORK_CONFIG = {
         { symbol: 'DEGEN', address: '0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed' },
         { symbol: 'BRETT', address: '0x532f27101965dd16442E59d40670FaF5eBB142E4' },
       ],
-      dexes: ['Uniswap V3 Base Sepolia', 'Aerodrome Sepolia'],
+      dexes: [
+        'Uniswap V3 Base Sepolia','Aerodrome Base Sepolia','BaseSwap Sepolia',
+        'SushiSwap Base Sepolia','PancakeSwap V3 Base Sep',
+        'AlienBase Sepolia','RocketSwap Sepolia','SwapBased Sepolia',
+      ],
     },
   },
 
@@ -248,7 +266,11 @@ const NETWORK_CONFIG = {
         { symbol: 'JITOSOL', address: 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn' },
         { symbol: 'BSOL',    address: 'bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1' },
       ],
-      dexes: ['Raydium Devnet', 'Orca Devnet'],
+      dexes: [
+        'Raydium Devnet','Orca Devnet','Meteora Devnet',
+        'Raydium CLMM Devnet','Orca Whirlpool Devnet','Lifinity Devnet',
+        'GooseFX Devnet','Saber Devnet',
+      ],
     },
   },
 };
