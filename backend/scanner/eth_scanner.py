@@ -30,9 +30,20 @@ DEX_CONFIGS = {
     'PancakeSwap V3 ETH': {'factory':'0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865','router':'0x1b81D678ffb9C0263b24A97847620C99d213eB14','fee_bps':5},
     'Uniswap V3':         {'factory':'0x1F98431c8aD98523631AE4a59f267346ea31F984','router':'0xE592427A0AEce92De3Edee1F18E0157C05861564','fee_bps':5},
     'Balancer V2':        {'factory':'0xBA12222222228d8Ba445958a75a0704d566BF2C8','router':'0xBA12222222228d8Ba445958a75a0704d566BF2C8','fee_bps':15},
+    'Curve ETH':          {'factory':'0xB9fC157394Af804a3578134A6585C0dc9cc990d4','router':'0x99a58482BD75cbab83b27EC03CA68fF489b5788f','fee_bps':4},
+    'DODO ETH':           {'factory':'0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f','router':'0xa356867fDaea8ed601Bb94d8B53E2a6F04Da7b6e','fee_bps':3},
+    'Kyberswap ETH':      {'factory':'0x833e4083B7ae46CeA85695c4f7ed25CDAd8886dE','router':'0x6131B5fae19EA4f9D964eAc0408E4408b66337b5','fee_bps':3},
     # Testnet
-    'Uniswap V2 Sepolia': {'factory':'0xF62c03E08ada871A0bEb309762E260a7a6a880E6','router':'0xeE567Fe1712Faf6149d80dA1E6934E354124CfE3','fee_bps':30},
-    'Uniswap V3 Sepolia': {'factory':'0x0227628f3F023bb0B980b67D528571c95c6DaC1c','router':'0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48','fee_bps':5},
+    'Uniswap V2 Sepolia':     {'factory':'0xF62c03E08ada871A0bEb309762E260a7a6a880E6','router':'0xeE567Fe1712Faf6149d80dA1E6934E354124CfE3','fee_bps':30},
+    'Uniswap V3 Sepolia':     {'factory':'0x0227628f3F023bb0B980b67D528571c95c6DaC1c','router':'0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48','fee_bps':5},
+    'SushiSwap Sepolia':      {'factory':'0xc35DADB65012eC5796536bD9864eD8773aBc74C4','router':'0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506','fee_bps':30},
+    'PancakeSwap V3 Sepolia': {'factory':'0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865','router':'0x1b81D678ffb9C0263b24A97847620C99d213eB14','fee_bps':5},
+    'Balancer V2 Sepolia':    {'factory':'0xBA12222222228d8Ba445958a75a0704d566BF2C8','router':'0xBA12222222228d8Ba445958a75a0704d566BF2C8','fee_bps':15},
+    'Fraxswap Sepolia':       {'factory':'0x43eC799eAdd63848443E2347C49f5f52e8Fe0F6f','router':'0xC14d550632db8592D1243Edc8B95b0Ad06703867','fee_bps':30},
+    'Shibaswap Sepolia':      {'factory':'0x115934131916C8b277DD010Ee02de363c09d037c','router':'0x03f7724180AA6b939894B5Ca4314783B0b36b329','fee_bps':30},
+    'Curve Sepolia':          {'factory':'0xB9fC157394Af804a3578134A6585C0dc9cc990d4','router':'0x99a58482BD75cbab83b27EC03CA68fF489b5788f','fee_bps':4},
+    'DODO Sepolia':           {'factory':'0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f','router':'0xa356867fDaea8ed601Bb94d8B53E2a6F04Da7b6e','fee_bps':3},
+    'Kyberswap Sepolia':      {'factory':'0x833e4083B7ae46CeA85695c4f7ed25CDAd8886dE','router':'0x6131B5fae19EA4f9D964eAc0408E4408b66337b5','fee_bps':3},
 }
 
 FLASH_PROVIDERS_MAINNET = [
@@ -254,9 +265,9 @@ class ETHScanner:
     def _dex_configs(self):
         if self.testnet:
             return {k: v for k, v in DEX_CONFIGS.items() if 'Sepolia' in k}
-        return {k: v for k, v in DEX_CONFIGS.items() if 'Sepolia' not in k}
+        return {k: v for k, v in DEX_CONFIGS.items() if 'Sepolia' not in k and 'Testnet' not in k}
 
-    def _connect(self):
+      def _connect(self):
         for url in self._rpc_list:
             try:
                 w3 = Web3(Web3.HTTPProvider(url, request_kwargs={'timeout': 25}))
@@ -507,7 +518,8 @@ class ETHScanner:
                     sell_impact = calc_price_impact(_q, sd['r_quote']) if _q > 0 else 0.0
 
                     is_profitable = result.get('profitable', False) and net_usd > 0 and net_pct >= min_net_pct
-                    status = 'profitable' if is_profitable else ('marginal' if gross_usd > 0 and net_usd > -gas_usd * 2 else 'unprofitable')
+                    is_marginal = (not is_profitable and gross_usd > 0 and (net_usd_raw + gas_usd) >= 0)
+                    status = 'profitable' if is_profitable else ('marginal' if is_marginal else 'unprofitable')
 
                     opportunities.append({
                         'id':                f"eth_{pdata['quote_sym']}_{pdata['base_sym']}_{buy_dex}_{sell_dex}_{int(time.time())}",
@@ -585,3 +597,5 @@ class ETHScanner:
             return {'status':'ready','unsignedTx':{'to':tx['to'],'data':tx['data'],'gas':hex(tx['gas']),'gasPrice':hex(tx['gasPrice']),'nonce':hex(tx['nonce']),'value':'0x0','chainId':chain_id}}
         except Exception as e:
             return {'status':'error','error':str(e)}
+
+    
