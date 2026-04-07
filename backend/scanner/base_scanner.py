@@ -608,7 +608,8 @@ class BaseScanner:
                     net_tok       = net_raw     if net_usd_raw >= 0 else (-gas_usd/price_usd if price_usd>0 else 0)
                     net_pct       = (net_raw / loan_tok * 100) if loan_tok > 0 else 0
                     is_profitable = result.get('profitable', False) and net_usd > 0 and net_pct >= min_net_pct
-                    status        = 'profitable' if is_profitable else ('marginal' if gross_usd>0 and net_usd>-gas_usd*2 else 'unprofitable')
+                    is_marginal   = (not is_profitable and gross_usd > 0 and (net_usd_raw + gas_usd) >= 0)
+                    status        = 'profitable' if is_profitable else ('marginal' if is_marginal else 'unprofitable')
                     flash_fee_usd = loan_usd * (flash_fee_bps / 10000)
                     buy_fee_usd   = loan_usd * (bd['fee_bps'] / 10000)
                     sell_fee_usd  = (loan_usd + gross_usd) * (sd['fee_bps'] / 10000)

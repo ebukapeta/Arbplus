@@ -537,7 +537,8 @@ class BSCScanner:
                     sell_impact = calc_price_impact(_q, sd['r_quote']) if _q > 0 else 0.0
 
                     is_profitable = result.get('profitable', False) and net_usd > 0 and net_pct >= min_net_pct
-                    status = 'profitable' if is_profitable else ('marginal' if gross_usd > 0 and net_usd > -gas_usd * 2 else 'unprofitable')
+                    is_marginal = (not is_profitable and gross_usd > 0 and (net_usd_raw + gas_usd) >= 0)
+                    status = 'profitable' if is_profitable else ('marginal' if is_marginal else 'unprofitable')
 
                     opportunities.append({
                         'id':                f"{pdata['quote_sym']}_{pdata['base_sym']}_{buy_dex}_{sell_dex}_{int(time.time())}",

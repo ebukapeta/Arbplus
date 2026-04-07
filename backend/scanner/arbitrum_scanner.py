@@ -27,14 +27,18 @@ DEX_CONFIGS = {
     'SushiSwap Arb':    {'factory':'0xc35DADB65012eC5796536bD9864eD8773aBc74C4','router':'0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506','fee_bps':30},
     'Ramses':           {'factory':'0xAAA20D08e59F6561f242b08513D36266C5A29415','router':'0xAAA87963EFeB6f7E0a2711F397663105Acb1805e','fee_bps':20},
     'Trader Joe Arb':   {'factory':'0xaE4EC9901c3076D0DdBe76A520F9E90a6227aCB7','router':'0x5573405636F4b895E511C9CB54329B88BA862000','fee_bps':30},
-    'Zyberswap':        {'factory':'0xaC2ee06A14c52570Ef3B9812Ed240BCe359772e7','router':'0xFa58b8024B49836772180f2Df902f231ba712F72','fee_bps':30},
-    # ── Testnet: 6 DEXes matching mainnet count ─────────────────────────────
-    'Uniswap V3 Arb Sepolia': {'factory':'0x248AB79Bbb9bC29bB72f7Cd42F17e054Fc40188e','router':'0x101F443B4d1b059569D643917553c771E1b9663A','fee_bps':5},
-    'Camelot V2 Testnet':     {'factory':'0x9b4a460da4B3BeDe5b9c86B2B96a5b86503e42e3','router':'0xdf39c8f7B09B9E3B1e3a9Ae78dE5e36E9Ac9EE72','fee_bps':30},
-    'SushiSwap Arb Sepolia':  {'factory':'0xc35DADB65012eC5796536bD9864eD8773aBc74C4','router':'0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506','fee_bps':30},
-    'Ramses Sepolia':         {'factory':'0xAAA20D08e59F6561f242b08513D36266C5A29415','router':'0xAAA87963EFeB6f7E0a2711F397663105Acb1805e','fee_bps':20},
-    'Trader Joe Arb Sep':     {'factory':'0xaE4EC9901c3076D0DdBe76A520F9E90a6227aCB7','router':'0x5573405636F4b895E511C9CB54329B88BA862000','fee_bps':30},
-    'Zyberswap Sepolia':      {'factory':'0xaC2ee06A14c52570Ef3B9812Ed240BCe359772e7','router':'0xFa58b8024B49836772180f2Df902f231ba712F72','fee_bps':30},
+    'Zyberswap':           {'factory':'0xaC2ee06A14c52570Ef3B9812Ed240BCe359772e7','router':'0xFa58b8024B49836772180f2Df902f231ba712F72','fee_bps':30},
+    'PancakeSwap V3 Arb':  {'factory':'0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865','router':'0x1b81D678ffb9C0263b24A97847620C99d213eB14','fee_bps':5},
+    'Balancer V2 Arb':     {'factory':'0xBA12222222228d8Ba445958a75a0704d566BF2C8','router':'0xBA12222222228d8Ba445958a75a0704d566BF2C8','fee_bps':15},
+    # ── Testnet: 8 DEXes matching mainnet count ──────────────────────────────
+    'Uniswap V3 Arb Sepolia':  {'factory':'0x248AB79Bbb9bC29bB72f7Cd42F17e054Fc40188e','router':'0x101F443B4d1b059569D643917553c771E1b9663A','fee_bps':5},
+    'Camelot V2 Testnet':      {'factory':'0x9b4a460da4B3BeDe5b9c86B2B96a5b86503e42e3','router':'0xdf39c8f7B09B9E3B1e3a9Ae78dE5e36E9Ac9EE72','fee_bps':30},
+    'SushiSwap Arb Sepolia':   {'factory':'0xc35DADB65012eC5796536bD9864eD8773aBc74C4','router':'0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506','fee_bps':30},
+    'Ramses Sepolia':          {'factory':'0xAAA20D08e59F6561f242b08513D36266C5A29415','router':'0xAAA87963EFeB6f7E0a2711F397663105Acb1805e','fee_bps':20},
+    'Zyberswap Sepolia':       {'factory':'0xaC2ee06A14c52570Ef3B9812Ed240BCe359772e7','router':'0xFa58b8024B49836772180f2Df902f231ba712F72','fee_bps':30},
+    'Trader Joe Arb Sep':      {'factory':'0xaE4EC9901c3076D0DdBe76A520F9E90a6227aCB7','router':'0x5573405636F4b895E511C9CB54329B88BA862000','fee_bps':30},
+    'PancakeSwap V3 Arb Sep':  {'factory':'0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865','router':'0x1b81D678ffb9C0263b24A97847620C99d213eB14','fee_bps':5},
+    'Balancer V2 Arb Sep':     {'factory':'0xBA12222222228d8Ba445958a75a0704d566BF2C8','router':'0xBA12222222228d8Ba445958a75a0704d566BF2C8','fee_bps':15},
 }
 
 FLASH_PROVIDERS_MAINNET = [
@@ -528,7 +532,8 @@ class ArbitrumScanner:
                     sell_impact   = calc_price_impact(_q, sd['r_quote']) if _q > 0 else 0.0
 
                     is_profitable = result.get('profitable', False) and net_usd > 0 and net_pct >= min_net_pct
-                    status = 'profitable' if is_profitable else ('marginal' if gross_usd > 0 and net_usd > -gas_usd * 2 else 'unprofitable')
+                    is_marginal = (not is_profitable and gross_usd > 0 and (net_usd_raw + gas_usd) >= 0)
+                    status = 'profitable' if is_profitable else ('marginal' if is_marginal else 'unprofitable')
 
                     opportunities.append({
                         'id':                f"arb_{pdata['quote_sym']}_{pdata['base_sym']}_{buy_dex}_{sell_dex}_{int(time.time())}",
