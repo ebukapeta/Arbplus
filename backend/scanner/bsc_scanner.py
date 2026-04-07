@@ -44,10 +44,17 @@ DEX_CONFIGS = {
     'SushiSwap':      {'factory':'0xc35DADB65012eC5796536bD9864eD8773aBc74C4','router':'0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506','fee_bps':30},
     'Thena':          {'factory':'0xAFD89d21BdB66d00817d4153E055830B1c2B3970','router':'0xd4ae6eCA985340Dd434D38F470aCCce4DC78d109','fee_bps':4},
     'PancakeSwap V3': {'factory':'0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865','router':'0x1b81D678ffb9C0263b24A97847620C99d213eB14','fee_bps':5},
-    # Testnet
+    # ── Testnet: 10 DEXes matching mainnet count ─────────────────────────────
     'PancakeSwap V2 Testnet': {'factory':'0x6725F303b657a9451d8BA641348b6761A6CC7a17','router':'0xD99D1c33F9fC3444f8101754aBC46c52416550D1','fee_bps':25},
-    'BakerySwap Testnet':     {'factory':'0x01bF7C66c6BD861915CdaaE475042d3c4BaE16A7','router':'0xCDe540d7eAFE93aC439CeF360f775d9E69dFd93f','fee_bps':30},
+    'PancakeSwap V3 Testnet': {'factory':'0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865','router':'0x1b81D678ffb9C0263b24A97847620C99d213eB14','fee_bps':5},
+    'BakerySwap Testnet':     {'factory':'0x01bF7C66c6BD861915CdaaE475042d3c4BaE16A7','router':'0xCDe540d7eAFE93aC439CeF360f775d9E69dFd93E','fee_bps':30},
     'JulSwap Testnet':        {'factory':'0x553990F2CBA90272390f62C5BDb1681fFc899675','router':'0xbd67d157502A23309Db761c41965600c2Ec788b2','fee_bps':30},
+    'ApeSwap Testnet':        {'factory':'0x0841BD0B734E4F5853f0dD8d7Ea041c241fb0Da6','router':'0xcF0feBd3f17CEf5b47b0cD257aCf6025c5BFf3b7','fee_bps':20},
+    'BiSwap Testnet':         {'factory':'0x858E3312ed3A876947EA49d572A7C42DE08af7EE','router':'0x3a6d8cA21D1CF76F653A67577FA0D27453350dD8','fee_bps':10},
+    'MDEX Testnet':           {'factory':'0x3CD1C46068dAEa5Ebb0d3f55F6915B10648062B8','router':'0x62c65B31E9b1D9b2580e089f4D2f4fFb8F0dAa5E','fee_bps':30},
+    'SushiSwap Testnet':      {'factory':'0xc35DADB65012eC5796536bD9864eD8773aBc74C4','router':'0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506','fee_bps':30},
+    'Nomiswap Testnet':       {'factory':'0xd6715A8be3944ec72738F0BFDC739d48C3c29349','router':'0xD654953D746f0b114d1F85332Dc43446ac79413d','fee_bps':10},
+    'KnightSwap Testnet':     {'factory':'0xf0bc2E21a76513aa7CC2730C7A1D6deE0790751f','router':'0x05E61E0cDcD2170a76F9568a110CEe3AFdD6c46f','fee_bps':25},
 }
 
 # ─── Flash loan providers — ordered cheapest first ───────────────────────────
