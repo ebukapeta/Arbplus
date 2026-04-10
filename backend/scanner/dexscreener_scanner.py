@@ -84,13 +84,20 @@ def parallel_fetch(fn, args_list: list, max_workers: int = 8, delay: float = 0.1
 # ── DEX name normalisation ────────────────────────────────────────────────────
 
 def normalize_dex(raw_dex_id: str, alias_map: dict) -> str:
-    """Map DexScreener dexId to canonical DEX name."""
+    """Map DexScreener dexId to canonical DEX name.
+    Returns empty string for hex addresses (pool addresses, not dex names)
+    so they are skipped — same logic as App.tsx normalizeDexName().
+    """
     if not raw_dex_id:
         return ''
     key = raw_dex_id.strip().lower()
+    # Skip if dexId is actually a contract/pool address (0x + hex chars)
+    import re as _re
+    if _re.match(r'^0x[a-f0-9]{8,}$', key):
+        return ''
     if key in alias_map:
         return alias_map[key]
-    # Prettify unknown IDs
+    # Prettify unknown IDs (capitalise each word)
     return ' '.join(w.capitalize() for w in key.replace('-', ' ').replace('_', ' ').split())
 
 
@@ -228,6 +235,10 @@ def derive_opportunities(
 
         spread_pct = ((sell_price - buy_price) / buy_price) * 100
         if spread_pct < min_spread_pct:
+            continue
+        # Skip stable/stable pairs with unrealistic spread (> 5%) — stale price data
+        both_stable = (buy['loan_asset'] in stable_symbols and buy['quote_asset'] in stable_symbols)
+        if both_stable and spread_pct > 5.0:
             continue
 
         pair_liq_usd  = min(buy['liq_usd'], sell['liq_usd'])
