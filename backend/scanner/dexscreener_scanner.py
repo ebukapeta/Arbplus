@@ -1,14 +1,12 @@
 """
 DexScreener Scanner — Base Class
-Uses DexScreener live price API (same approach as App.tsx) instead of on-chain reserve math.
+Uses DexScreener live price API instead of on-chain reserve math.
 All EVM network scanners inherit from this class.
 
-DexScreener API endpoints used:
-  GET /token-pairs/v1/{chain}/{tokenAddress}   — pairs for a single token
-  GET /tokens/v1/{chain}/{addr1,addr2,...}      — batch token pairs
-  GET /latest/dex/search?q={query}             — search by symbol
-
-This replicates the deriveOpportunities() logic from App.tsx in Python.
+Fee model:
+  - gas_usd    : fixed tx cost (real-world: same computation regardless of loan size)
+  - dex_fee_pct: percentage of trade size (0.3% buy + 0.3% sell = 0.6% default)
+  - flash_fee  : percentage of loan (provider's bps / 100)
 """
 
 import time
@@ -37,7 +35,6 @@ def _get(url: str, timeout: int = 12) -> Optional[dict]:
 
 
 def fetch_token_pairs(chain: str, token_address: str) -> list:
-    """Fetch all pairs for a single token address."""
     data = _get(f"https://api.dexscreener.com/token-pairs/v1/{chain}/{token_address}")
     if isinstance(data, list):
         return data
@@ -45,7 +42,6 @@ def fetch_token_pairs(chain: str, token_address: str) -> list:
 
 
 def fetch_token_batch(chain: str, addresses: list) -> list:
-    """Fetch pairs for up to 30 token addresses in one request."""
     if not addresses:
         return []
     joined = ','.join(addresses[:30])
@@ -56,7 +52,6 @@ def fetch_token_batch(chain: str, addresses: list) -> list:
 
 
 def fetch_search_pairs(chain: str, query: str) -> list:
-    """Search DexScreener by symbol/query, filter to chain."""
     data = _get(f"https://api.dexscreener.com/latest/dex/search?q={requests.utils.quote(query)}")
     if not isinstance(data, dict):
         return []
@@ -66,7 +61,6 @@ def fetch_search_pairs(chain: str, query: str) -> list:
 
 
 def parallel_fetch(fn, args_list: list, max_workers: int = 8, delay: float = 0.1) -> list:
-    """Run fetch calls in parallel, return merged list."""
     results = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {pool.submit(fn, *args): args for args in args_list}
@@ -84,50 +78,55 @@ def parallel_fetch(fn, args_list: list, max_workers: int = 8, delay: float = 0.1
 # ── DEX name normalisation ────────────────────────────────────────────────────
 
 def normalize_dex(raw_dex_id: str, alias_map: dict) -> str:
-    """Map DexScreener dexId to canonical DEX name.
-    Returns empty string for hex addresses (pool addresses, not dex names)
-    so they are skipped — same logic as App.tsx normalizeDexName().
-    """
     if not raw_dex_id:
         return ''
     key = raw_dex_id.strip().lower()
-    # Skip if dexId is actually a contract/pool address (0x + hex chars)
     import re as _re
     if _re.match(r'^0x[a-f0-9]{8,}$', key):
         return ''
     if key in alias_map:
         return alias_map[key]
-    # Prettify unknown IDs (capitalise each word)
     return ' '.join(w.capitalize() for w in key.replace('-', ' ').replace('_', ' ').split())
 
 
-# ── Core opportunity derivation (replicates App.tsx deriveOpportunities) ─────
+# ── Core opportunity derivation ───────────────────────────────────────────────
 
 def derive_opportunities(
     pairs: list,
-    main_tokens: set,          # set of upper-case symbols e.g. {'WBNB', 'USDT', ...}
-    stable_symbols: set,       # e.g. {'USDT', 'USDC', 'DAI', 'BUSD', ...}
-    dex_alias_map: dict,       # dexId → canonical name
-    price_fallbacks: dict,     # symbol → USD price fallback
-    flash_fee_pct: float,      # e.g. 0.0 for DODO, 0.05 for Aave
-    gas_usd: float,            # estimated gas cost in USD
+    main_tokens: set,
+    stable_symbols: set,
+    dex_alias_map: dict,
+    price_fallbacks: dict,
+    flash_fee_pct: float,
+    gas_usd: float,
     min_net_profit_usd: float = 0.20,
     min_liquidity_usd: float = 30_000,
-    loan_cap_ratio: float = 0.0025,   # 0.25% of pool liquidity
+    loan_cap_ratio: float = 0.0025,
     min_loan_usd: float = 200.0,
     price_impact_mult: float = 1.5,
-    dex_fee_pct: float = 0.08,        # combined estimate (buy + sell)
+    # DEX swap fee: 0.3% buy + 0.3% sell = 0.6% of trade size
+    # This scales proportionally with loan size (unlike fixed gas_usd)
+    dex_fee_pct: float = 0.60,
     min_spread_pct: float = 0.05,
 ) -> tuple:
     """
     Derive arbitrage opportunities from DexScreener pairs.
+
+    Fee breakdown per opportunity
+    ─────────────────────────────
+    gas_usd       Fixed blockchain tx cost. Same whether loan is $200 or $200k.
+                  Differs per chain (BSC ~$0.32, ETH ~$28, ARB ~$0.12, Base ~$0.05).
+    dex_fee_usd   loan_usd × 0.60%  →  scales with trade size.
+                  (0.3% on buy DEX + 0.3% on sell DEX — standard V2/V3 fee tier)
+    flash_fee_usd loan_usd × provider_bps/100  →  scales with trade size.
+                  (DODO 0%, PancakeV3 0.01%, Aave 0.05%, Balancer 0%)
+
     Returns (opportunities: list, stats: dict).
     """
 
     # ── Build USD price oracle using stable-pair mean ─────────────────────────
     price_sum: dict = {}
     price_count: dict = {}
-    # Seed with fallbacks
     for sym, usd in price_fallbacks.items():
         price_sum[sym.upper()] = usd
         price_count[sym.upper()] = 1
@@ -149,17 +148,15 @@ def derive_opportunities(
         stable_sym = quote_sym if base_is_main  else base_sym
         if stable_sym not in stable_symbols:
             continue
-        prev_sum   = price_sum.get(main_sym, 0)
-        prev_count = price_count.get(main_sym, 0)
-        price_sum[main_sym]   = prev_sum   + price
-        price_count[main_sym] = prev_count + 1
+        price_sum[main_sym]   = price_sum.get(main_sym, 0)   + price
+        price_count[main_sym] = price_count.get(main_sym, 0) + 1
 
     token_usd: dict = {
         sym: price_sum[sym] / max(price_count[sym], 1)
         for sym in price_sum
     }
 
-    # ── Group pairs into buckets by loanAsset/quoteAsset ────────────────────
+    # ── Group pairs into buckets ──────────────────────────────────────────────
     buckets: dict = {}
     skipped_liq = 0
     skipped_nomatch = 0
@@ -213,7 +210,7 @@ def derive_opportunities(
 
     logger.info(f"  Pair buckets: {len(buckets)} | skipped liq={skipped_liq} nomatch={skipped_nomatch}")
 
-    # ── Derive opportunities from buckets ─────────────────────────────────────
+    # ── Derive opportunities ──────────────────────────────────────────────────
     opportunities = []
     near_misses   = []
     eligible_pools = sum(len(b) for b in buckets.values())
@@ -236,20 +233,26 @@ def derive_opportunities(
         spread_pct = ((sell_price - buy_price) / buy_price) * 100
         if spread_pct < min_spread_pct:
             continue
-        # Skip stable/stable pairs with unrealistic spread (> 5%) — stale price data
         both_stable = (buy['loan_asset'] in stable_symbols and buy['quote_asset'] in stable_symbols)
         if both_stable and spread_pct > 5.0:
             continue
 
-        pair_liq_usd  = min(buy['liq_usd'], sell['liq_usd'])
-        loan_usd      = max(min_loan_usd, pair_liq_usd * loan_cap_ratio)
-        loan_asset_usd= token_usd.get(buy['loan_asset'], 1.0)
-        loan_amt      = loan_usd / max(loan_asset_usd, 1e-9)
+        pair_liq_usd      = min(buy['liq_usd'], sell['liq_usd'])
+        loan_usd          = max(min_loan_usd, pair_liq_usd * loan_cap_ratio)
+        loan_asset_usd    = token_usd.get(buy['loan_asset'], 1.0)
+        loan_amt          = loan_usd / max(loan_asset_usd, 1e-9)
 
         price_impact_pct  = (loan_usd / max(pair_liq_usd, 1)) * 100 * price_impact_mult
-        total_fee_pct     = flash_fee_pct + dex_fee_pct + price_impact_pct
+
+        # Fee components
+        # dex_fee_usd and flash_fee_usd both scale with loan_usd (volume-proportional)
+        # gas_usd is fixed regardless of loan size (fixed computation cost on-chain)
+        dex_fee_usd       = loan_usd * (dex_fee_pct   / 100)
+        flash_fee_usd     = loan_usd * (flash_fee_pct / 100)
+        impact_fee_usd    = loan_usd * (price_impact_pct / 100)
+        total_fee_usd     = dex_fee_usd + flash_fee_usd + impact_fee_usd
+
         gross_profit_usd  = loan_usd * (spread_pct / 100)
-        total_fee_usd     = loan_usd * (total_fee_pct / 100)
         net_profit_usd    = gross_profit_usd - total_fee_usd - gas_usd
         net_pct           = (net_profit_usd / loan_usd * 100) if loan_usd > 0 else 0
 
@@ -282,15 +285,15 @@ def derive_opportunities(
             'flashLoanAsset':    buy['loan_asset'],
             'flashLoanAmount':   round(loan_amt,   6),
             'flashLoanAmountUsd':round(loan_usd,   2),
-            'flashLoanProvider': '',      # filled by subclass
-            'flashLoanPool':     '',      # filled by subclass
+            'flashLoanProvider': '',
+            'flashLoanPool':     '',
             'grossProfit':       round(gross_profit_usd / max(loan_asset_usd, 1e-9), 6),
             'grossProfitUsd':    round(gross_profit_usd, 2),
             'netProfit':         round(net_profit_usd  / max(loan_asset_usd, 1e-9), 6),
             'netProfitUsd':      round(net_profit_usd,  2),
             'gasFee':            round(gas_usd,          2),
-            'dexFees':           round(loan_usd * (dex_fee_pct / 100), 2),
-            'flashFee':          round(loan_usd * (flash_fee_pct / 100), 2),
+            'dexFees':           round(dex_fee_usd,      2),
+            'flashFee':          round(flash_fee_usd,    2),
             'netProfitPct':      round(net_pct,    4),
             'buyPoolLiquidity':  round(buy['liq_usd'],  0),
             'sellPoolLiquidity': round(sell['liq_usd'], 0),
@@ -315,18 +318,12 @@ def derive_opportunities(
 # ── DexScreenerScanner base class ────────────────────────────────────────────
 
 class DexScreenerScanner:
-    """
-    Base scanner that uses DexScreener live prices for opportunity detection.
-    Subclasses provide network-specific constants and execute_trade().
-    """
-
-    # ── Override in subclass ──────────────────────────────────────────────────
-    DEXSCREENER_CHAIN = 'bsc'           # chain ID for DexScreener API
+    DEXSCREENER_CHAIN = 'bsc'
     NETWORK_NAME      = 'Network'
-    BASE_TOKENS_MAINNET: dict = {}      # symbol → address
+    BASE_TOKENS_MAINNET: dict = {}
     BASE_TOKENS_TESTNET: dict = {}
-    PRICE_FALLBACKS: dict = {}          # symbol → USD fallback
-    DEX_ALIASES: dict = {}              # dexId → canonical name
+    PRICE_FALLBACKS: dict = {}
+    DEX_ALIASES: dict = {}
     STABLE_SYMBOLS: set = {'USDT','USDC','DAI','BUSD','FRAX','LUSD','GHO','USDbC','USDR'}
     FLASH_PROVIDERS_MAINNET: list = []
     FLASH_PROVIDERS_TESTNET: list = []
@@ -334,7 +331,6 @@ class DexScreenerScanner:
     GAS_GWEI_MAINNET: float = 5.0
     GAS_GWEI_TESTNET: float = 3.0
     NATIVE_PRICE_USD: float = 600.0
-    # ── End overrides ─────────────────────────────────────────────────────────
 
     def __init__(self, testnet: bool = False):
         self.testnet = testnet
@@ -354,7 +350,6 @@ class DexScreenerScanner:
         return self.GAS_UNITS * gwei * 1e-9 * self.NATIVE_PRICE_USD
 
     def _select_flash_provider(self, base_sym: str) -> dict:
-        """Return cheapest provider that supports the base token."""
         for p in self._flash_providers:
             supported = p.get('assets', [])
             if not supported or base_sym in supported:
@@ -362,17 +357,9 @@ class DexScreenerScanner:
         return self._flash_providers[0] if self._flash_providers else {'name': 'Auto', 'fee_bps': 5}
 
     def _fetch_all_pairs(self, base_tokens: list, config: dict) -> list:
-        """
-        Full DexScreener fetch pipeline (mirrors App.tsx runScanCycle):
-          1. Primary pairs for each base token
-          2. Expansion tokens discovered from primary pairs
-          3. Batch fetch expansion tokens
-          4. Search by symbol for each base token
-        """
         chain = self.DEXSCREENER_CHAIN
         logger.info(f"[{self.NETWORK_NAME}] Fetching DexScreener pairs for {len(base_tokens)} base tokens …")
 
-        # ── Step 1: Primary pairs ──────────────────────────────────────────────
         primary_pairs = parallel_fetch(
             fetch_token_pairs,
             [(chain, addr) for addr in base_tokens],
@@ -380,7 +367,6 @@ class DexScreenerScanner:
         )
         logger.info(f"  Primary fetch: {len(primary_pairs)} raw pairs")
 
-        # ── Step 2: Discover expansion tokens ────────────────────────────────
         min_exp_liq   = 40_000 if self.DEXSCREENER_CHAIN == 'ethereum' else 80_000
         exp_limit     = 140 if self.DEXSCREENER_CHAIN != 'ethereum' else 420
         base_addr_set = {a.lower() for a in base_tokens}
@@ -398,7 +384,6 @@ class DexScreenerScanner:
         ][:exp_limit]))
         expansion_addrs = [a for a in expansion_addrs if a and len(a) > 10]
 
-        # ── Step 3: Batch fetch expansion tokens ─────────────────────────────
         expansion_pairs = []
         if expansion_addrs:
             chunks = [expansion_addrs[i:i+30] for i in range(0, len(expansion_addrs), 30)]
@@ -409,7 +394,6 @@ class DexScreenerScanner:
             )
             logger.info(f"  Expansion fetch: {len(expansion_addrs)} tokens → {len(expansion_pairs)} pairs")
 
-        # ── Step 4: Search by symbol ──────────────────────────────────────────
         main_syms = list(self._base_tokens.keys())
         search_queries = []
         for sym in main_syms[:8]:
@@ -421,7 +405,6 @@ class DexScreenerScanner:
         )
         logger.info(f"  Search fetch: {len(search_queries)} queries → {len(searched_pairs)} pairs")
 
-        # ── Merge & deduplicate ───────────────────────────────────────────────
         all_pairs  = primary_pairs + expansion_pairs + searched_pairs
         seen       = {}
         unique     = []
@@ -435,7 +418,7 @@ class DexScreenerScanner:
         return unique
 
     def scan(self, config: dict) -> dict:
-        label     = 'Testnet' if self.testnet else 'Mainnet'
+        label        = 'Testnet' if self.testnet else 'Mainnet'
         base_tokens  = config.get('baseTokens', list(self._base_tokens.keys()))
         min_net_pct  = float(config.get('minNetProfitPct', 0.05))
         min_liq_usd  = float(config.get('minLiquidityUsd', 30_000))
@@ -445,17 +428,16 @@ class DexScreenerScanner:
             f"\n{'='*60}\n"
             f"[{self.NETWORK_NAME} {label}] Scan start\n"
             f"  Base tokens : {base_tokens}\n"
-            f"  Gas est.    : ${gas_usd:.4f}\n"
+            f"  Gas est.    : ${gas_usd:.4f} (fixed tx cost)\n"
+            f"  DEX fee     : 0.60% of trade size (0.3% buy + 0.3% sell)\n"
             f"{'='*60}"
         )
 
-        # Resolve base token addresses
         base_addrs = [self._base_tokens[s] for s in base_tokens if s in self._base_tokens]
         if not base_addrs:
             logger.error("No valid base token addresses found")
             return {'opportunities':[],'total':0,'profitable':0,'best_profit_usd':0,'avg_spread':0,'error':'No valid base tokens'}
 
-        # Fetch pairs from DexScreener
         start = __import__('time').time()
         all_pairs = self._fetch_all_pairs(base_addrs, config)
         fetch_time = round(__import__('time').time() - start, 2)
@@ -464,36 +446,30 @@ class DexScreenerScanner:
             logger.warning("No pairs returned from DexScreener")
             return {'opportunities':[],'total':0,'profitable':0,'best_profit_usd':0,'avg_spread':0}
 
-        # Select cheapest flash provider for fee calculation
-        # (each opportunity will get its own provider assigned below)
         cheapest_provider = self._flash_providers[0] if self._flash_providers else {'name':'Auto','fee_bps':5}
         flash_fee_pct     = cheapest_provider['fee_bps'] / 100
 
-        # Derive opportunities
         opps, stats = derive_opportunities(
-            pairs          = all_pairs,
-            main_tokens    = set(t.upper() for t in list(self._base_tokens.keys())),
-            stable_symbols = self.STABLE_SYMBOLS,
-            dex_alias_map  = self.DEX_ALIASES,
-            price_fallbacks= self.PRICE_FALLBACKS,
-            flash_fee_pct  = flash_fee_pct,
-            gas_usd        = gas_usd,
+            pairs           = all_pairs,
+            main_tokens     = set(t.upper() for t in list(self._base_tokens.keys())),
+            stable_symbols  = self.STABLE_SYMBOLS,
+            dex_alias_map   = self.DEX_ALIASES,
+            price_fallbacks = self.PRICE_FALLBACKS,
+            flash_fee_pct   = flash_fee_pct,
+            gas_usd         = gas_usd,
             min_net_profit_usd = 0.10,
             min_liquidity_usd  = min_liq_usd,
         )
 
-        # Assign flash providers to each opportunity
         for opp in opps:
             provider = self._select_flash_provider(opp['baseToken'])
             opp['flashLoanProvider'] = provider['name']
             opp['flashLoanPool']     = provider.get('pool', '')
             opp['testnet']           = self.testnet
 
-        # Filter by min net profit %
         profitable = [o for o in opps if o['netProfitUsd'] > 0 and o['netProfitPct'] >= min_net_pct]
         avg_spread = round(sum(o['spread'] for o in opps) / len(opps), 4) if opps else 0
 
-        # ── Logging ────────────────────────────────────────────────────────────
         logger.info(
             f"\n[{self.NETWORK_NAME} {label}] Scan complete in {fetch_time}s\n"
             f"  Unique pools  : {len(all_pairs)}\n"
@@ -501,7 +477,7 @@ class DexScreenerScanner:
             f"  Eligible pools: {stats['eligible_pools']}\n"
             f"  Opportunities : {len(opps)} total | {len(profitable)} profitable\n"
             f"  Avg spread    : {avg_spread:.4f}%\n"
-            f"  Best net profit: ${opps[0]['netProfitUsd']:.2f}" if opps else "  No opportunities found"
+            + (f"  Best net profit: ${opps[0]['netProfitUsd']:.2f}" if opps else "  No opportunities found")
         )
 
         if opps:
@@ -512,13 +488,15 @@ class DexScreenerScanner:
                     f"{opp['buyDex']:20s} → {opp['sellDex']:20s} "
                     f"spread={opp['spread']:.4f}% "
                     f"loan=${opp['flashLoanAmountUsd']:,.0f} "
+                    f"dex_fee=${opp['dexFees']:.2f} "
+                    f"gas=${opp['gasFee']:.2f} "
                     f"net=${opp['netProfitUsd']:.2f} "
                     f"[{opp['flashLoanProvider']}]"
                 )
 
         near = stats['near_misses']
         if near:
-            logger.info(f"\n[{self.NETWORK_NAME}] NEAR MISSES (top 5 — just below gas threshold):")
+            logger.info(f"\n[{self.NETWORK_NAME}] NEAR MISSES (top 5):")
             for nm in sorted(near, key=lambda x: x['net_usd'], reverse=True)[:5]:
                 logger.info(
                     f"  {nm['pair']:25s} {nm['buy_dex']} → {nm['sell_dex']:20s} "
@@ -541,5 +519,4 @@ class DexScreenerScanner:
         }
 
     def execute_trade(self, opportunity: dict, wallet_address: str, contract_address: str) -> dict:
-        """Override in subclass for network-specific execution."""
         return {'status': 'error', 'error': 'execute_trade not implemented in base class'}

@@ -23,6 +23,8 @@ DEX_ROUTERS_MAINNET = {
     'RocketSwap':          '0x4cf76043B3f97ba06917cBd90F9e3A2AAC1B306e',
     'PancakeSwap V3 Base': '0x1b81D678ffb9C0263b24A97847620C99d213eB14',
     'SushiSwap Base':      '0x6BDED42c6DA8FBf0d2bA55B2fa120C5e0c8D7891',
+    'Balancer V2 Base':    '0xBA12222222228d8Ba445958a75a0704d566BF2C8',
+    'Extra Finance':       '0x8F9Fa34C4E3009337D28b0fEFB4ed2F78Ddc46D5',
 }
 DEX_ROUTERS_TESTNET = {
     'Uniswap V3 Base Sepolia': '0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4',
@@ -49,6 +51,8 @@ class BaseScanner(DexScreenerScanner):
         'USDbC': '0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA',
         'DEGEN': '0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed',
         'BRETT': '0x532f27101965dd16442E59d40670FaF5eBB142E4',
+        'cbBTC': '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf',
+        'rETH':  '0xB6fe221Fe9EeF5aBa221c348bA20A1Bf5e73624',
     }
     BASE_TOKENS_TESTNET = {
         'WETH':  '0x4200000000000000000000000000000000000006',
@@ -63,7 +67,7 @@ class BaseScanner(DexScreenerScanner):
 
     PRICE_FALLBACKS = {
         'WETH':3500.0,'USDC':1.0,'DAI':1.0,'cbETH':3600.0,
-        'AERO':1.5,'USDbC':1.0,'DEGEN':0.02,'BRETT':0.15,
+        'AERO':1.5,'USDbC':1.0,'DEGEN':0.02,'BRETT':0.15,'cbBTC':65000.0,'rETH':3600.0,
     }
 
     DEX_ALIASES = {

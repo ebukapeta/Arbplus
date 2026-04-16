@@ -23,6 +23,8 @@ DEX_ROUTERS_MAINNET = {
     'Zyberswap':           '0xFa58b8024B49836772180f2Df902f231ba712F72',
     'PancakeSwap V3 Arb':  '0x1b81D678ffb9C0263b24A97847620C99d213eB14',
     'Balancer V2 Arb':     '0xBA12222222228d8Ba445958a75a0704d566BF2C8',
+    'Chronos':             '0xE708aA9E887980750C040a6A2Cb901c37Aa34f3b',
+    'WOOFi Arb':           '0x9aEd3A8896A85FE9a8CAc52C9B402D092B629a30',
 }
 DEX_ROUTERS_TESTNET = {
     'Uniswap V3 Arb Sepolia':  '0x101F443B4d1b059569D643917553c771E1b9663A',
@@ -49,6 +51,8 @@ class ArbitrumScanner(DexScreenerScanner):
         'ARB':   '0x912CE59144191C1204E64559FE8253a0e49E6548',
         'FRAX':  '0x17FC002b466eEc40DaE837Fc4bE5c67993ddBd6F',
         'GMX':   '0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a',
+        'LINK':  '0xf97f4df75117a78c1A5a0DBb814Af92458539FB3',
+        'USDCe': '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8',
     }
     BASE_TOKENS_TESTNET = {
         'WETH':  '0x980B62Da83eFf3D4576C647993b0c1D7faf17c73',
@@ -63,7 +67,7 @@ class ArbitrumScanner(DexScreenerScanner):
 
     PRICE_FALLBACKS = {
         'WETH':3500.0,'USDT':1.0,'USDC':1.0,'DAI':1.0,'WBTC':65000.0,
-        'ARB':1.2,'FRAX':1.0,'GMX':25.0,
+        'ARB':1.2,'FRAX':1.0,'GMX':25.0,'LINK':15.0,'USDCe':1.0,
     }
 
     DEX_ALIASES = {
@@ -81,9 +85,10 @@ class ArbitrumScanner(DexScreenerScanner):
         'zyberswap':            'Zyberswap',
         'zyberswap-v2':         'Zyberswap',
         'balancer-v2':          'Balancer V2 Arb',
-        'woofi':                'WOOFi',
+        'woofi':                'WOOFi Arb',
         'chronos':              'Chronos',
         'chronos-v2':           'Chronos',
+        'woofi-v2':             'WOOFi Arb',
         'odos':                 'Odos',
         'gmx':                  'GMX',
         'gmx-v2':               'GMX',

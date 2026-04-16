@@ -27,16 +27,9 @@ DEX_ROUTERS_MAINNET = {
     'Kyberswap ETH':      '0x6131B5fae19EA4f9D964eAc0408E4408b66337b5',
 }
 DEX_ROUTERS_TESTNET = {
-    'Uniswap V2 Sepolia':      '0xeE567Fe1712Faf6149d80dA1E6934E354124CfE3',
-    'Uniswap V3 Sepolia':      '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E',
-    'SushiSwap Sepolia':       '0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506',
-    'PancakeSwap V3 Sepolia':  '0x1b81D678ffb9C0263b24A97847620C99d213eB14',
-    'Balancer V2 Sepolia':     '0xBA12222222228d8Ba445958a75a0704d566BF2C8',
-    'Fraxswap Sepolia':        '0xC14d550632db8592D1243Edc8B95b0Ad06703867',
-    'Shibaswap Sepolia':       '0x03f7724180AA6b939894B5Ca4314783B0b36b329',
-    'Curve Sepolia':           '0x99a58482BD75cbab83b27EC03CA68fF489b5788f',
-    'DODO Sepolia':            '0xa356867fDaea8ed601Bb94d8B53E2a6F04Da7b6e',
-    'Kyberswap Sepolia':       '0x6131B5fae19EA4f9D964eAc0408E4408b66337b5',
+    # ETH testnet uses only these two verified Sepolia DEXes
+    'Uniswap V2 Sepolia':  '0xeE567Fe1712Faf6149d80dA1E6934E354124CfE3',
+    'SushiSwap Sepolia':   '0xeaBcE3E74EF19FB48d55747bf2Eb333B6f47A80a',
 }
 
 

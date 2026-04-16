@@ -26,6 +26,8 @@ class SolanaScanner(DexScreenerScanner):
         'JTO':     'jtojtomepa8bJkZSqEXSJm5Z4e6PdBXuBvC5jNYWqDi',
         'JITOSOL': 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn',
         'BSOL':    'bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1',
+        'RAY':     '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R',
+        'JUP':     'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
     }
     BASE_TOKENS_TESTNET = {
         'WSOL':    'So11111111111111111111111111111111111111112',
@@ -41,7 +43,7 @@ class SolanaScanner(DexScreenerScanner):
     PRICE_FALLBACKS = {
         'WSOL':150.0,'USDC':1.0,'USDT':1.0,'MSOL':160.0,
         'BONK':0.00003,'JTO':3.5,'JITOSOL':155.0,'BSOL':158.0,
-        'WIF':2.5,'JUP':0.8,'RAY':2.0,'ORCA':3.5,
+        'WIF':2.5,'JUP':0.8,'RAY':2.0,'ORCA':3.5,'BSOL':158.0,
     }
 
     DEX_ALIASES = {

@@ -64,6 +64,8 @@ class BSCScanner(DexScreenerScanner):
         'ETH':  '0x2170Ed0880ac9A755fd29B2688956BD959F933F8',
         'DAI':  '0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3',
         'CAKE': '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82',
+        'LINK': '0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD',
+        'XVS':  '0xcF6BB5389c92Bdda8a3747Ddb454cB7a64626C63',
     }
     BASE_TOKENS_TESTNET = {
         'WBNB': '0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd',
@@ -78,7 +80,7 @@ class BSCScanner(DexScreenerScanner):
 
     PRICE_FALLBACKS = {
         'WBNB':600.0,'USDT':1.0,'USDC':1.0,'BTCB':65000.0,
-        'BUSD':1.0,'ETH':3500.0,'DAI':1.0,'CAKE':3.0,
+        'BUSD':1.0,'ETH':3500.0,'DAI':1.0,'CAKE':3.0,'LINK':15.0,'XVS':8.0,
     }
 
     # DexScreener dexId → canonical name used in UI config
