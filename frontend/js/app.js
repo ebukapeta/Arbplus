@@ -52,6 +52,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   testnetToggle?.addEventListener('change', () => {
     AppState.isTestnet = testnetToggle.checked;
+
+    if (AppState.isTestnet) {
+      // Testnet = Ethereum only. Force-switch to ETH and activate its pill.
+      AppState.network = 'eth';
+      document.querySelectorAll('.network-pill').forEach(p => p.classList.remove('active'));
+      document.querySelector('.network-pill[data-network="eth"]')?.classList.add('active');
+    }
+
     WalletManager.setNetwork(AppState.network);
     applyNetworkMode();
   });
