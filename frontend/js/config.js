@@ -1,7 +1,9 @@
 /**
  * ArbPulse — Network & DEX Configuration
- * 5 networks (BSC, ETH, Arbitrum, Base, Solana) × mainnet/testnet
- * Flash loan provider selection is automatic (backend picks cheapest with reserves).
+ *
+ * TESTNET RULE: Only Ethereum uses testnet (Sepolia).
+ * BSC / Arbitrum / Base / Solana always run mainnet regardless of toggle.
+ * effectiveIsTestnet(network) enforces this everywhere.
  */
 
 // ─── Global App State ────────────────────────────────────────────────────────
@@ -9,6 +11,16 @@ const AppState = {
   isTestnet: false,
   network:   'bsc',
 };
+
+/**
+ * Returns true only when BOTH:
+ *   1. The testnet toggle is on
+ *   2. The active network is 'eth'
+ * All other chains are always mainnet.
+ */
+function effectiveIsTestnet(network) {
+  return AppState.isTestnet && network === 'eth';
+}
 
 // ─── Network Configurations ──────────────────────────────────────────────────
 const NETWORK_CONFIG = {
@@ -32,12 +44,15 @@ const NETWORK_CONFIG = {
         { symbol: 'ETH',  address: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8' },
         { symbol: 'DAI',  address: '0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3' },
         { symbol: 'CAKE', address: '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82' },
+        { symbol: 'LINK', address: '0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD' },
+        { symbol: 'XVS',  address: '0xcF6BB5389c92Bdda8a3747Ddb454cB7a64626C63' },
       ],
       dexes: [
         'PancakeSwap V2','PancakeSwap V3','ApeSwap','BiSwap',
         'MDEX','BabySwap','Thena','KnightSwap','SushiSwap','Nomiswap',
       ],
     },
+    // BSC testnet config kept for completeness but never activated by UI
     testnet: {
       name: 'BSC Testnet', label: 'BSC Test', dotClass: 'bsc',
       chainId: 97, chainIdHex: '0x61',
@@ -92,6 +107,7 @@ const NETWORK_CONFIG = {
         'Curve ETH','DODO ETH','Kyberswap ETH',
       ],
     },
+    // ETH Sepolia — the ONLY testnet active in this app
     testnet: {
       name: 'Sepolia', label: 'Sepolia', dotClass: 'eth',
       chainId: 11155111, chainIdHex: '0xaa36a7',
@@ -112,10 +128,10 @@ const NETWORK_CONFIG = {
         { symbol: 'FRAX',  address: '0x853d955aCEf822Db058eb8505911ED77F175b99e' },
         { symbol: 'LUSD',  address: '0x5f98805A4E8be255a32880FDeC7F6728C6568bA0' },
       ],
+      // Trimmed to only the two live Sepolia DEXes
       dexes: [
-        'Uniswap V2 Sepolia','Uniswap V3 Sepolia','SushiSwap Sepolia',
-        'PancakeSwap V3 Sepolia','Balancer V2 Sepolia','Fraxswap Sepolia',
-        'Shibaswap Sepolia','Curve Sepolia','DODO Sepolia','Kyberswap Sepolia',
+        'Uniswap V2 Sepolia',
+        'SushiSwap Sepolia',
       ],
     },
   },
@@ -139,13 +155,16 @@ const NETWORK_CONFIG = {
         { symbol: 'ARB',   address: '0x912CE59144191C1204E64559FE8253a0e49E6548' },
         { symbol: 'FRAX',  address: '0x17FC002b466eEc40DaE837Fc4bE5c67993ddBd6F' },
         { symbol: 'GMX',   address: '0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a' },
+        { symbol: 'LINK',  address: '0xf97f4df75117a78c1A5a0DBb814Af92458539FB3' },
+        { symbol: 'USDCe', address: '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8' },
       ],
       dexes: [
         'Camelot V2','Uniswap V3 Arb','SushiSwap Arb',
         'Ramses','Trader Joe Arb','Zyberswap',
-        'PancakeSwap V3 Arb','Balancer V2 Arb',
+        'PancakeSwap V3 Arb','Balancer V2 Arb','Chronos','WOOFi Arb',
       ],
     },
+    // Arb testnet kept for reference but never activated (ETH only for testnet)
     testnet: {
       name: 'Arb Sepolia', label: 'Arb Test', dotClass: 'arb',
       chainId: 421614, chainIdHex: '0x66eee',
@@ -155,20 +174,10 @@ const NETWORK_CONFIG = {
       blockExplorerTx:   'https://sepolia.arbiscan.io/tx/',
       walletType: 'evm',
       baseTokens: [
-        { symbol: 'WETH',  address: '0x980B62Da83eFf3D4576C647993b0c1D7faf17c73' },
-        { symbol: 'USDC',  address: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d' },
-        { symbol: 'ARB',   address: '0x912CE59144191C1204E64559FE8253a0e49E6548' },
-        { symbol: 'DAI',   address: '0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1' },
-        { symbol: 'USDT',  address: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9' },
-        { symbol: 'WBTC',  address: '0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f' },
-        { symbol: 'FRAX',  address: '0x17FC002b466eEc40DaE837Fc4bE5c67993ddBd6F' },
-        { symbol: 'GMX',   address: '0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a' },
+        { symbol: 'WETH', address: '0x980B62Da83eFf3D4576C647993b0c1D7faf17c73' },
+        { symbol: 'USDC', address: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d' },
       ],
-      dexes: [
-        'Uniswap V3 Arb Sepolia','Camelot V2 Testnet','SushiSwap Arb Sepolia',
-        'Ramses Sepolia','Trader Joe Arb Sep','Zyberswap Sepolia',
-        'PancakeSwap V3 Arb Sep','Balancer V2 Arb Sep',
-      ],
+      dexes: ['Uniswap V3 Arb Sepolia'],
     },
   },
 
@@ -191,12 +200,16 @@ const NETWORK_CONFIG = {
         { symbol: 'USDbC', address: '0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA' },
         { symbol: 'DEGEN', address: '0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed' },
         { symbol: 'BRETT', address: '0x532f27101965dd16442E59d40670FaF5eBB142E4' },
+        { symbol: 'cbBTC', address: '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf' },
+        { symbol: 'rETH',  address: '0xB6fe221Fe9EeF5aBa221c348bA20A1Bf5e73624' },
       ],
       dexes: [
         'Aerodrome','BaseSwap','Uniswap V3 Base',
         'SwapBased','AlienBase','RocketSwap','PancakeSwap V3 Base','SushiSwap Base',
+        'Balancer V2 Base','Extra Finance',
       ],
     },
+    // Base testnet kept for reference but never activated
     testnet: {
       name: 'Base Sepolia', label: 'Base Test', dotClass: 'base',
       chainId: 84532, chainIdHex: '0x14a34',
@@ -206,20 +219,10 @@ const NETWORK_CONFIG = {
       blockExplorerTx:   'https://sepolia.basescan.org/tx/',
       walletType: 'evm',
       baseTokens: [
-        { symbol: 'WETH',  address: '0x4200000000000000000000000000000000000006' },
-        { symbol: 'USDC',  address: '0x036CbD53842c5426634e7929541eC2318f3dCF7e' },
-        { symbol: 'DAI',   address: '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb' },
-        { symbol: 'cbETH', address: '0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22' },
-        { symbol: 'AERO',  address: '0x940181a94A35A4569E4529A3CDfB74e38FD98631' },
-        { symbol: 'USDbC', address: '0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA' },
-        { symbol: 'DEGEN', address: '0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed' },
-        { symbol: 'BRETT', address: '0x532f27101965dd16442E59d40670FaF5eBB142E4' },
+        { symbol: 'WETH', address: '0x4200000000000000000000000000000000000006' },
+        { symbol: 'USDC', address: '0x036CbD53842c5426634e7929541eC2318f3dCF7e' },
       ],
-      dexes: [
-        'Uniswap V3 Base Sepolia','Aerodrome Base Sepolia','BaseSwap Sepolia',
-        'SushiSwap Base Sepolia','PancakeSwap V3 Base Sep',
-        'AlienBase Sepolia','RocketSwap Sepolia','SwapBased Sepolia',
-      ],
+      dexes: ['Uniswap V3 Base Sepolia'],
     },
   },
 
@@ -242,12 +245,15 @@ const NETWORK_CONFIG = {
         { symbol: 'JTO',     address: 'jtojtomepa8bJkZSqEXSJm5Z4e6PdBXuBvC5jNYWqDi' },
         { symbol: 'JITOSOL', address: 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn' },
         { symbol: 'BSOL',    address: 'bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1' },
+        { symbol: 'RAY',     address: '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R' },
+        { symbol: 'JUP',     address: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN' },
       ],
       dexes: [
         'Raydium V4','Raydium CLMM','Orca Whirlpool','Orca V2',
-        'Meteora DLMM','Lifinity V2','GooseFX','Saber',
+        'Meteora DLMM','Lifinity V2','GooseFX','Saber','Phoenix','OpenBook',
       ],
     },
+    // Solana devnet kept for reference but never activated
     testnet: {
       name: 'Sol Devnet', label: 'Sol Dev', dotClass: 'sol',
       chainId: null,
@@ -257,27 +263,19 @@ const NETWORK_CONFIG = {
       blockExplorerTx:   'https://solscan.io/tx/',
       walletType: 'solana',
       baseTokens: [
-        { symbol: 'WSOL',    address: 'So11111111111111111111111111111111111111112' },
-        { symbol: 'USDC',    address: 'Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr' },
-        { symbol: 'USDT',    address: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB' },
-        { symbol: 'MSOL',    address: 'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So' },
-        { symbol: 'BONK',    address: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263' },
-        { symbol: 'JTO',     address: 'jtojtomepa8bJkZSqEXSJm5Z4e6PdBXuBvC5jNYWqDi' },
-        { symbol: 'JITOSOL', address: 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn' },
-        { symbol: 'BSOL',    address: 'bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1' },
+        { symbol: 'WSOL', address: 'So11111111111111111111111111111111111111112' },
+        { symbol: 'USDC', address: 'Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr' },
       ],
-      dexes: [
-        'Raydium Devnet','Orca Devnet','Meteora Devnet',
-        'Raydium CLMM Devnet','Orca Whirlpool Devnet','Lifinity Devnet',
-        'GooseFX Devnet','Saber Devnet',
-      ],
+      dexes: ['Raydium Devnet','Orca Devnet'],
     },
   },
 };
 
 /** Return config for the active network + mainnet/testnet mode. */
 function getNetCfg(network, isTestnet) {
-  return NETWORK_CONFIG[network]?.[isTestnet ? 'testnet' : 'mainnet']
+  // Only ETH supports testnet — all other chains use mainnet config always
+  const useTestnet = effectiveIsTestnet(network);
+  return NETWORK_CONFIG[network]?.[useTestnet ? 'testnet' : 'mainnet']
       || NETWORK_CONFIG.bsc.mainnet;
 }
 
@@ -290,14 +288,15 @@ function activeCfg() {
 const TOKEN_COLORS = {
   // BSC
   WBNB: '#f0b90b', BTCB: '#f7931a', CAKE: '#ff7e00', BUSD: '#f0b90b',
-  BSW:  '#1fc7d4',
+  BSW:  '#1fc7d4', XVS:  '#0a3d62',
   // Stablecoins
   USDT: '#26a17b', USDC: '#2775ca', DAI: '#f9a606', FRAX: '#000000',
   LUSD: '#1542cd', MIM:  '#9695a4', GHO: '#6749d6', crvUSD: '#b5cbff',
-  USDbC:'#2775ca', HAY:  '#f8d900',
+  USDbC:'#2775ca', HAY:  '#f8d900', USDCe:'#2775ca',
   // ETH & derivatives
   WETH: '#627eea', ETH: '#627eea', stETH: '#00a3ff', wstETH: '#00a3ff',
   cbETH:'#0052ff', rETH: '#ff8c00', frxETH:'#b5c0ce', ETHX: '#5b4fcf',
+  cbBTC:'#f7931a',
   // L1/infrastructure
   WBTC: '#f7931a', LINK: '#2a5ada', UNI: '#ff007a', AAVE: '#b6509e',
   MKR:  '#1aab9b', CRV:  '#d9b27c', CVX:  '#3a3a3a', SNX:  '#00d1ff',
@@ -311,6 +310,7 @@ const TOKEN_COLORS = {
   // Solana
   WSOL: '#9945ff', MSOL: '#e84142', BONK: '#ffa500', JTO: '#89f9a5',
   JITOSOL:'#27b580', BSOL:'#00bcd4', WIF: '#9945ff', JUP: '#c8b73a',
+  RAY:  '#6e52ff',
   // Meme
   SHIB: '#ff5722', PEPE: '#3cb371', FLOKI:'#f5a623', APE: '#054bde',
   // Gaming
@@ -361,7 +361,6 @@ function shortTxHash(hash) {
   return hash.slice(0, 8) + '...' + hash.slice(-6);
 }
 
-// Network gas label helper
 function networkGasLabel(network) {
   return { bsc:'BSC', eth:'Ethereum', arb:'Arbitrum', base:'Base', solana:'Solana' }[network] || network;
 }

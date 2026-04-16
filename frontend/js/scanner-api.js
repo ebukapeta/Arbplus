@@ -1,19 +1,27 @@
 /**
  * ArbPulse — Scanner API
- * Communicates with the Flask backend. Flash provider is chosen automatically by backend.
+ * Communicates with the Flask backend.
+ *
+ * Testnet rule: only ETH sends testnet:true to backend.
+ * Stale-result guard: if the user switches chain mid-scan, results from the
+ *   previous chain are silently discarded.
  */
 
 const ScannerAPI = (() => {
   const BASE = '';
 
-  let _scanInterval     = null;
-  let _isScanning       = false;
-  let _countdownInterval= null;
-  let _contractAddress  = '';
+  let _scanInterval      = null;
+  let _isScanning        = false;
+  let _countdownInterval = null;
+  let _contractAddress   = '';
   let _onResults = () => {};
   let _onStart   = () => {};
   let _onStop    = () => {};
   let _onError   = () => {};
+
+  // Track which network + testnet state each scan was launched on
+  let _scanStartNetwork = null;
+  let _scanStartTestnet = null;
 
   function onResults(cb) { _onResults = cb; }
   function onStart(cb)   { _onStart   = cb; }
@@ -24,7 +32,8 @@ const ScannerAPI = (() => {
 
   function buildConfig() {
     const network   = AppState.network;
-    const isTestnet = AppState.isTestnet;
+    // Only ETH uses testnet — all other chains always send mainnet
+    const isTestnet = network === 'eth' && AppState.isTestnet;
     const cfg       = activeCfg();
 
     const activeBaseTokens = Array.from(
@@ -42,7 +51,6 @@ const ScannerAPI = (() => {
         minNetProfitPct:   parseFloat(document.getElementById('cfg-min-profit')?.value  || 0.10),
         slippageTolerance: parseFloat(document.getElementById('cfg-slippage')?.value    || 1.00),
         minLiquidityUsd:   parseFloat(document.getElementById('cfg-min-liq')?.value     || 2000),
-        // No flashLoanProvider — backend auto-selects cheapest with reserves
         baseTokens: activeBaseTokens.length ? activeBaseTokens : cfg.baseTokens.map(t => t.symbol),
         dexes:      activeDexes.length      ? activeDexes      : cfg.dexes,
       },
@@ -51,9 +59,16 @@ const ScannerAPI = (() => {
 
   async function runScan() {
     const payload = buildConfig();
-    const mode    = payload.testnet ? 'TESTNET' : 'MAINNET';
+
+    // Snapshot the network + testnet state at scan launch
+    const launchNetwork = payload.network;
+    const launchTestnet = payload.testnet;
+    _scanStartNetwork = launchNetwork;
+    _scanStartTestnet = launchTestnet;
+
+    const mode = launchTestnet ? 'TESTNET' : 'MAINNET';
     AppLog.scan(
-      `Scanning ${payload.network.toUpperCase()} [${mode}] — ` +
+      `Scanning ${launchNetwork.toUpperCase()} [${mode}] — ` +
       `${payload.config.dexes.length} DEXes, ${payload.config.baseTokens.length} base tokens…`
     );
 
@@ -66,6 +81,13 @@ const ScannerAPI = (() => {
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
       if (data.error) throw new Error(data.error);
+
+      // Stale-result guard: discard if user switched chain during the request
+      const currentTestnet = AppState.network === 'eth' && AppState.isTestnet;
+      if (AppState.network !== launchNetwork || currentTestnet !== launchTestnet) {
+        AppLog.warn(`Discarding stale results from ${launchNetwork.toUpperCase()} (chain switched during scan)`);
+        return;
+      }
 
       AppLog.profit(
         `Scan complete — ${data.total} opps, ${data.profitable} profitable. ` +
@@ -120,7 +142,7 @@ const ScannerAPI = (() => {
     if (!contractAddr) throw new Error('Smart contract address not set. Enter it in Scanner Config.');
 
     const network   = AppState.network;
-    const isTestnet = AppState.isTestnet;
+    const isTestnet = network === 'eth' && AppState.isTestnet;
 
     AppLog.exec(`Building flash loan tx for ${opportunity.pair} (${opportunity.buyDex} → ${opportunity.sellDex})…`);
 
@@ -154,7 +176,6 @@ const ScannerAPI = (() => {
     try {
       const resp = await fetch(`${BASE}/api/config`);
       const data = await resp.json();
-      // Fill contract address from env if not already set
       const input = document.getElementById('cfg-contract');
       if (input && !input.value) {
         const addr = data[`${AppState.network}ContractAddress`] || data.bscContractAddress || '';

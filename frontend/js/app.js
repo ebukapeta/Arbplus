@@ -1,6 +1,7 @@
 /**
  * ArbPulse — Main Application
- * Wires all modules together. Manages 5 networks × mainnet/testnet.
+ * Testnet mode activates ONLY for Ethereum (Sepolia).
+ * All other chains always stay on mainnet regardless of the toggle.
  */
 
 // ─── Logger ──────────────────────────────────────────────────────────────────
@@ -32,22 +33,26 @@ document.addEventListener('DOMContentLoaded', () => {
   const testnetBanner = document.getElementById('testnet-banner');
 
   function applyNetworkMode() {
-    const isTestnet = AppState.isTestnet;
-    document.body.classList.toggle('testnet-active', isTestnet);
-    if (testnetBanner) testnetBanner.classList.toggle('hidden', !isTestnet);
+    const isActive = effectiveIsTestnet(AppState.network);
+    document.body.classList.toggle('testnet-active', isActive);
+    if (testnetBanner) testnetBanner.classList.toggle('hidden', !isActive);
     _updateScannerModeIndicator();
     _populateNetworkUI(AppState.network);
-    AppLog.info(
-      isTestnet
-        ? `⚠ Switched to TESTNET mode — ${activeCfg().name}`
-        : `✓ Switched to MAINNET mode — ${activeCfg().name}`
-    );
+
+    if (isActive) {
+      AppLog.warn(`⚠ TESTNET mode — ${activeCfg().name} (Ethereum Sepolia only)`);
+    } else {
+      const net = AppState.network !== 'eth'
+        ? `${activeCfg().name} (always mainnet)`
+        : `${activeCfg().name} · Mainnet`;
+      AppLog.info(`✓ Mainnet mode — ${net}`);
+    }
     if (ScannerAPI.isScanning()) ScannerAPI.stopScanning();
   }
 
   testnetToggle?.addEventListener('change', () => {
     AppState.isTestnet = testnetToggle.checked;
-    WalletManager.setNetwork(AppState.network); // refresh wallet UI chain switch
+    WalletManager.setNetwork(AppState.network);
     applyNetworkMode();
   });
 
@@ -60,25 +65,32 @@ document.addEventListener('DOMContentLoaded', () => {
       WalletManager.setNetwork(AppState.network);
       _populateNetworkUI(AppState.network);
       _updateScannerModeIndicator();
+
+      // Clear stale results immediately on chain switch
+      ResultsManager.clear();
+
       const cfg = activeCfg();
-      AppLog.info(`Switched to ${cfg.name}${AppState.isTestnet ? ' (Testnet)' : ''}`);
+      const isTestnetActive = effectiveIsTestnet(AppState.network);
+      AppLog.info(`Switched to ${cfg.name}${isTestnetActive ? ' (Testnet)' : ' (Mainnet)'}`);
       if (ScannerAPI.isScanning()) ScannerAPI.stopScanning();
     });
   });
 
   function _updateScannerModeIndicator() {
-    const cfg      = activeCfg();
-    const indicator= document.getElementById('scanner-mode-indicator');
-    const text     = document.getElementById('scanner-mode-text');
+    const cfg       = activeCfg();
+    const indicator = document.getElementById('scanner-mode-indicator');
+    const text      = document.getElementById('scanner-mode-text');
     if (!indicator || !text) return;
-    const mode = AppState.isTestnet ? 'Testnet' : 'Mainnet';
+
+    const isTestnetActive = effectiveIsTestnet(AppState.network);
+    const mode = isTestnetActive ? 'Testnet' : 'Mainnet';
     text.textContent = `${cfg.name} · ${mode}`;
-    indicator.classList.toggle('testnet', AppState.isTestnet);
-    indicator.classList.toggle('mainnet', !AppState.isTestnet);
+    indicator.classList.toggle('testnet', isTestnetActive);
+    indicator.classList.toggle('mainnet', !isTestnetActive);
   }
 
   function _populateNetworkUI(network) {
-    const cfg = activeCfg(); // uses AppState.isTestnet
+    const cfg = activeCfg(); // honours effectiveIsTestnet internally
 
     // Base tokens
     const tokenGrid = document.getElementById('base-tokens-grid');
@@ -135,7 +147,6 @@ document.addEventListener('DOMContentLoaded', () => {
   ScannerAPI.onStart(() => {
     document.getElementById('start-scan-btn')?.classList.add('hidden');
     document.getElementById('stop-scan-btn')?.classList.remove('hidden');
-    // Switch to results tab
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     document.querySelector('[data-tab="results"]')?.classList.add('active');
@@ -204,7 +215,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
   });
 
-  // ── Fetch backend config on load ──────────────────────────────────────────
   ScannerAPI.fetchConfig();
-  AppLog.info('ArbPulse initialised. Select network, toggle mainnet/testnet, then start scanning.');
+  AppLog.info('ArbPulse initialised. Testnet mode active for Ethereum only (Sepolia). All other chains always use mainnet.');
 });

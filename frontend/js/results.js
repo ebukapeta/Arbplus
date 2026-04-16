@@ -10,7 +10,16 @@ const ResultsManager = (() => {
   let _searchQuery      = '';
 
   function update(data) {
-    _allOpportunities = data.opportunities || [];
+    const fresh = data.opportunities || [];
+    // Preserve existing results if backend returned empty (transient DexScreener hiccup).
+    // Only replace when we get a real non-empty result set.
+    if (fresh.length > 0) {
+      _allOpportunities = fresh;
+    } else if (_allOpportunities.length > 0) {
+      AppLog.warn('Scan returned 0 results — keeping previous opportunities until next cycle.');
+    } else {
+      _allOpportunities = fresh;
+    }
 
     _setEl('stat-total',       data.total          ?? '—');
     _setEl('stat-profitable',  data.profitable      ?? '—');
@@ -349,5 +358,10 @@ const ResultsManager = (() => {
     return n.toFixed(4);
   }
 
-  return { update, setFilter, setSort, setSearch, openExecuteModal: _openExecuteModal };
+  function clear() {
+    _allOpportunities = [];
+    _render();
+  }
+
+  return { update, clear, setFilter, setSort, setSearch, openExecuteModal: _openExecuteModal };
 })();
