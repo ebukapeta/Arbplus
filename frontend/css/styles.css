@@ -471,3 +471,8 @@ body.testnet-active #tab-bar { top: 101px; }
   .wallet-area { margin-left: 0; }
   .net-mode-toggle { order: 2; }
 }
+
+/* ── Testnet mode: hide all chain pills except Ethereum ─────────────────── */
+body.testnet-active .network-pill:not([data-network="eth"]) {
+  display: none;
+}
