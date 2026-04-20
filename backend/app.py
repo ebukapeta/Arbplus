@@ -13,6 +13,7 @@ from scanner.eth_scanner      import ETHScanner
 from scanner.arbitrum_scanner import ArbitrumScanner
 from scanner.base_scanner     import BaseScanner
 from scanner.solana_scanner   import SolanaScanner
+from scanner.eth_testnet_mock  import ETHTestnetMockScanner
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,7 +26,7 @@ _scanners = {
     ('bsc',    False): BSCScanner(testnet=False),
     ('bsc',    True):  BSCScanner(testnet=True),
     ('eth',    False): ETHScanner(testnet=False),
-    ('eth',    True):  ETHScanner(testnet=True),
+    ('eth',    True):  ETHTestnetMockScanner(),   # Sepolia mock — DexScreener has no Sepolia data
     ('arb',    False): ArbitrumScanner(testnet=False),
     ('arb',    True):  ArbitrumScanner(testnet=True),
     ('base',   False): BaseScanner(testnet=False),
