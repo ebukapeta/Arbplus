@@ -21,6 +21,10 @@ const ResultsManager = (() => {
       _allOpportunities = fresh;
     }
 
+    // Show/hide simulation banner based on mock flag
+    const simBanner = document.getElementById('simulation-banner');
+    if (simBanner) simBanner.classList.toggle('hidden', !data.mock);
+
     _setEl('stat-total',       data.total          ?? '—');
     _setEl('stat-profitable',  data.profitable      ?? '—');
     _setEl('stat-best-profit', data.best_profit_usd != null ? formatUsd(data.best_profit_usd) : '—');
