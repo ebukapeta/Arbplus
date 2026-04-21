@@ -142,6 +142,8 @@ const ScannerAPI = (() => {
     if (!contractAddr) throw new Error('Contract address not set. Go to Scanner Config tab and enter your deployed contract address.');
     // Basic Ethereum address validation before sending to backend
     if (!/^0x[0-9a-fA-F]{40}$/.test(contractAddr)) throw new Error(`Invalid contract address: "${contractAddr}". Must be a 42-character hex address starting with 0x.`);
+    // Persist whenever we use it
+    localStorage.setItem('arbpulse_contract_address', contractAddr);
 
     const network   = AppState.network;
     const isTestnet = network === 'eth' && AppState.isTestnet;
@@ -183,11 +185,27 @@ const ScannerAPI = (() => {
       const data = await resp.json();
       const input = document.getElementById('cfg-contract');
       if (input && !input.value) {
-        const addr = data[`${AppState.network}ContractAddress`] || data.bscContractAddress || '';
+        // First try localStorage, then fall back to backend env config
+        const saved = localStorage.getItem('arbpulse_contract_address') || '';
+        const addr  = saved || data[`${AppState.network}ContractAddress`] || data.bscContractAddress || '';
         if (addr) input.value = addr;
       }
     } catch {}
   }
+
+  function _saveContractAddress() {
+    const val = document.getElementById('cfg-contract')?.value?.trim() || '';
+    if (val) localStorage.setItem('arbpulse_contract_address', val);
+  }
+
+  // Persist contract address whenever user types into the field
+  document.addEventListener('DOMContentLoaded', () => {
+    const input = document.getElementById('cfg-contract');
+    if (input) {
+      input.addEventListener('change', _saveContractAddress);
+      input.addEventListener('blur',   _saveContractAddress);
+    }
+  });
 
   return {
     startScanning, stopScanning, runScan, executeTrade, sendTransactionEVM,
