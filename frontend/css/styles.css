@@ -51,7 +51,6 @@ body { background: var(--bg); color: var(--text); font-family: var(--font-main);
 .testnet-banner {
   position: sticky; top: 0; z-index: 200;
   background: linear-gradient(90deg, rgba(255,209,102,0.15), rgba(255,77,109,0.1));
-  border-bottom: 1px solid rgba(255,209,102,0.4);
   color: var(--gold); font-size: 12px; font-weight: 700;
   text-align: center; padding: 8px 20px; letter-spacing: 0.05em;
   font-family: var(--font-mono);
@@ -478,7 +477,7 @@ body.testnet-active .network-pill:not([data-network="eth"]) {
 }
 
 /* ── Testnet simulation banner ───────────────────────────────────────────── */
-/* Sits directly below the testnet banner (testnet-banner is ~37px tall) */
+/* Sits directly below the testnet banner */
 .simulation-banner {
   position: fixed;
   top: 37px;
