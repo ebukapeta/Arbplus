@@ -139,7 +139,9 @@ const ScannerAPI = (() => {
     if (!walletAddress) throw new Error('Wallet not connected');
 
     const contractAddr = document.getElementById('cfg-contract')?.value?.trim() || _contractAddress;
-    if (!contractAddr) throw new Error('Smart contract address not set. Enter it in Scanner Config.');
+    if (!contractAddr) throw new Error('Contract address not set. Go to Scanner Config tab and enter your deployed contract address.');
+    // Basic Ethereum address validation before sending to backend
+    if (!/^0x[0-9a-fA-F]{40}$/.test(contractAddr)) throw new Error(`Invalid contract address: "${contractAddr}". Must be a 42-character hex address starting with 0x.`);
 
     const network   = AppState.network;
     const isTestnet = network === 'eth' && AppState.isTestnet;

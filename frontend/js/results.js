@@ -262,6 +262,8 @@ const ResultsManager = (() => {
 
 <div class="modal-warning">⚠ Atomic on-chain tx. Auto-reverts if profit not met. Gas from wallet, not loan.</div>`;
 
+    // Reset body visibility — may have been hidden by a previous execution attempt
+    body.style.display = '';
     modal.classList.remove('hidden');
     document.getElementById('modal-confirm-btn').onclick = () => _doExecute(opp, modal);
     document.getElementById('modal-cancel-btn').onclick  = () => modal.classList.add('hidden');
