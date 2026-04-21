@@ -311,7 +311,9 @@ const ResultsManager = (() => {
 
       let txHash = '';
       if (execData.unsignedTx && window.ethereum) {
-        txHash = await ScannerAPI.sendTransactionEVM(execData.unsignedTx);
+        // MetaMask requires `from` field — inject connected wallet address
+        const txToSend = { ...execData.unsignedTx, from: WalletManager.getAddress() };
+        txHash = await ScannerAPI.sendTransactionEVM(txToSend);
       } else {
         txHash = '0x' + Array.from({length:64}, () => Math.floor(Math.random()*16).toString(16)).join('');
       }

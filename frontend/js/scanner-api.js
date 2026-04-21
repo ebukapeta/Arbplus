@@ -161,7 +161,10 @@ const ScannerAPI = (() => {
 
   async function sendTransactionEVM(unsignedTx) {
     if (!window.ethereum) throw new Error('MetaMask not available');
-    return await window.ethereum.request({ method: 'eth_sendTransaction', params: [unsignedTx] });
+    // Always ensure from is present — MetaMask rejects without it
+    const tx = { ...unsignedTx };
+    if (!tx.from) tx.from = WalletManager.getAddress();
+    return await window.ethereum.request({ method: 'eth_sendTransaction', params: [tx] });
   }
 
   async function fetchHistory() {

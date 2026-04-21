@@ -142,10 +142,14 @@ const WalletManager = (() => {
         _state[_activeNetwork].address   = accs[0] || '';
         _updateUI(); _emit();
       });
-      provider.on('chainChanged', () => window.location.reload());
+      provider.on('chainChanged', (chainId) => {
+        // Don't reload — just log the change. Reloading wipes wallet state.
+        AppLog.warn('Chain changed in wallet. If network mismatch, reconnect manually.');
+      });
 
+      _saveState();
       _updateUI(); _emit();
-      AppLog.info(`${walletName} connected on ${cfg.name}: ${_fmtAddr(accounts[0])}`);
+      AppLog.info(`${walletName} connected on ${cfg.name}: ${_fmtAddr(accounts[0])}`);;
     } catch (e) {
       AppLog.error(`${walletName} connection failed: ${e.message}`);
       _showError(e.message);
@@ -172,8 +176,9 @@ const WalletManager = (() => {
         _state.solana.address   = '';
         if (_activeNetwork === 'solana') { _updateUI(); _emit(); }
       });
+      _saveState();
       _updateUI(); _emit();
-      AppLog.info(`${walletName} connected on Solana: ${_fmtAddr(address)}`);
+      AppLog.info(`${walletName} connected on Solana: ${_fmtAddr(address)}`);;
     } catch (e) {
       AppLog.error(`${walletName} connection failed: ${e.message}`);
       _showError(e.message);
@@ -188,6 +193,7 @@ const WalletManager = (() => {
       try { await _state.solana.provider.disconnect(); } catch {}
     }
     _state[net] = { connected: false, address: '', walletName: '', provider: null };
+    _saveState();
     _updateUI(); _emit();
     const cfg = activeCfg();
     AppLog.info(`${name} disconnected from ${cfg.name}.`);
@@ -259,6 +265,41 @@ const WalletManager = (() => {
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 4000);
   }
+
+  // ─── Persist wallet state ────────────────────────────────────────────
+  function _saveState() {
+    try {
+      const saved = {};
+      Object.keys(_state).forEach(net => {
+        const s = _state[net];
+        if (s.connected && s.address) {
+          saved[net] = { address: s.address, walletName: s.walletName };
+        }
+      });
+      localStorage.setItem('arbpulse_wallet', JSON.stringify(saved));
+    } catch {}
+  }
+
+  function _restoreState() {
+    try {
+      const raw = localStorage.getItem('arbpulse_wallet');
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      Object.keys(saved).forEach(net => {
+        if (_state[net] && saved[net].address) {
+          _state[net].connected  = true;
+          _state[net].address    = saved[net].address;
+          _state[net].walletName = saved[net].walletName;
+          // provider is null after restore — re-attach on next action
+        }
+      });
+      _updateUI();
+      AppLog.info('Wallet session restored. Re-connect if you need to sign transactions.');
+    } catch {}
+  }
+
+  // Restore on module load
+  document.addEventListener('DOMContentLoaded', _restoreState);
 
   return { openPicker, closePicker, disconnect, setNetwork, getAddress, isConnected, getNetwork, getWalletName, onWalletChange };
 })();
