@@ -260,7 +260,7 @@ class ETHTestnetMockScanner:
             quote_addr = Web3.to_checksum_address(opportunity['quoteTokenAddress'].lower())
             flash_amt  = int(opportunity['flashLoanAmount'] * 1e18)
             min_profit = int(opportunity.get('netProfit', 0) * 0.9 * 1e18)
-            deadline   = int(time.time()) + 180
+            deadline   = int(time.time()) + 1200  # 20 minutes — Sepolia blocks are slow and inconsistent
 
             contract = self.w3.eth.contract(
                 address=Web3.to_checksum_address(contract_address.lower()),
@@ -278,7 +278,9 @@ class ETHTestnetMockScanner:
             ).build_transaction({
                 'from':     Web3.to_checksum_address(wallet_address.lower()),
                 'gas':      500_000,
-                'gasPrice': self.w3.eth.gas_price,
+                # Enforce minimum 3 gwei — Sepolia sometimes returns near-zero gas price
+                # which causes transactions to be dropped from the mempool
+                'gasPrice': max(self.w3.eth.gas_price, 3_000_000_000),
                 'nonce':    self.w3.eth.get_transaction_count(Web3.to_checksum_address(wallet_address.lower())),
             })
 
