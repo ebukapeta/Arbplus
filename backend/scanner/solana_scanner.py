@@ -4,6 +4,8 @@ Solana DEX Scanner — DexScreener price-based + Jupiter quotes
 """
 import os, time, logging, requests
 from .dexscreener_scanner import DexScreenerScanner, fetch_token_pairs, fetch_search_pairs, parallel_fetch
+from .solana_validator import validate_solana_opportunity
+from .execution_engine import mark_rejected, mark_verified, mark_execution_ready
 
 logger = logging.getLogger(__name__)
 

@@ -15,6 +15,25 @@ import requests
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# Validation modules — imported lazily to avoid circular imports and
+# to allow scanners that don't have Web3 (Solana) to still function.
+_reserve_fetcher   = None
+_router_validator  = None
+_execution_engine  = None
+
+def _load_validators():
+    global _reserve_fetcher, _router_validator, _execution_engine
+    if _reserve_fetcher is None:
+        try:
+            from . import reserve_fetcher  as _rf
+            from . import router_validator as _rv
+            from . import execution_engine as _ee
+            _reserve_fetcher  = _rf
+            _router_validator = _rv
+            _execution_engine = _ee
+        except Exception as e:
+            logging.getLogger(__name__).warning(f"Validators not loaded: {e}")
+
 logger = logging.getLogger(__name__)
 
 # ── DexScreener API helpers ───────────────────────────────────────────────────
@@ -466,8 +485,20 @@ class DexScreenerScanner:
             opp['flashLoanProvider'] = provider['name']
             opp['flashLoanPool']     = provider.get('pool', '')
             opp['testnet']           = self.testnet
+            opp['executionStatus']   = 'candidate'
 
-        profitable = [o for o in opps if o['netProfitUsd'] > 0 and o['netProfitPct'] >= min_net_pct]
+        # ── Verification gate ─────────────────────────────────────────────
+        # Run reserve + router checks on EVM chains (requires Web3).
+        # Solana validation is handled in SolanaScanner.scan() override.
+        w3 = getattr(self, 'w3', None)
+        if w3 and not self.testnet:
+            _load_validators()
+            opps = self._verify_opportunities(opps, w3)
+
+        profitable = [o for o in opps
+                      if o['netProfitUsd'] > 0
+                      and o['netProfitPct'] >= min_net_pct
+                      and o.get('executionStatus') != 'rejected']
         avg_spread = round(sum(o['spread'] for o in opps) / len(opps), 4) if opps else 0
 
         logger.info(
