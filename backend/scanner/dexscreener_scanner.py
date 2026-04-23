@@ -499,21 +499,26 @@ class DexScreenerScanner:
                       if o['netProfitUsd'] > 0
                       and o['netProfitPct'] >= min_net_pct
                       and o.get('executionStatus') != 'rejected']
-        avg_spread = round(sum(o['spread'] for o in opps) / len(opps), 4) if opps else 0
+        # Filter out rejected opps before sending to frontend and computing stats
+        visible_opps = [o for o in opps if o.get('executionStatus') != 'rejected']
+        rejected_count = len(opps) - len(visible_opps)
+
+        avg_spread = round(sum(o['spread'] for o in visible_opps) / len(visible_opps), 4) if visible_opps else 0
+        best_profit = visible_opps[0]['netProfitUsd'] if visible_opps else 0
 
         logger.info(
             f"\n[{self.NETWORK_NAME} {label}] Scan complete in {fetch_time}s\n"
             f"  Unique pools  : {len(all_pairs)}\n"
             f"  Pair buckets  : {stats['bucket_count']}\n"
             f"  Eligible pools: {stats['eligible_pools']}\n"
-            f"  Opportunities : {len(opps)} total | {len(profitable)} profitable\n"
+            f"  Opportunities : {len(visible_opps)} visible | {rejected_count} rejected | {len(profitable)} profitable\n"
             f"  Avg spread    : {avg_spread:.4f}%\n"
-            + (f"  Best net profit: ${opps[0]['netProfitUsd']:.2f}" if opps else "  No opportunities found")
+            + (f"  Best net profit: ${best_profit:.2f}" if visible_opps else "  No opportunities found")
         )
 
-        if opps:
-            logger.info(f"\n[{self.NETWORK_NAME}] TOP {min(10, len(opps))} OPPORTUNITIES:")
-            for i, opp in enumerate(opps[:10], 1):
+        if visible_opps:
+            logger.info(f"\n[{self.NETWORK_NAME}] TOP {min(10, len(visible_opps))} OPPORTUNITIES:")
+            for i, opp in enumerate(visible_opps[:10], 1):
                 logger.info(
                     f"  #{i:2d} {opp['pair']:25s} "
                     f"{opp['buyDex']:20s} → {opp['sellDex']:20s} "
@@ -522,7 +527,7 @@ class DexScreenerScanner:
                     f"dex_fee=${opp['dexFees']:.2f} "
                     f"gas=${opp['gasFee']:.2f} "
                     f"net=${opp['netProfitUsd']:.2f} "
-                    f"[{opp['flashLoanProvider']}]"
+                    f"[{opp['flashLoanProvider']}] [{opp.get('executionStatus','?')}]"
                 )
 
         near = stats['near_misses']
@@ -537,11 +542,12 @@ class DexScreenerScanner:
                 )
 
         return {
-            'opportunities':    opps[:50],
-            'total':            len(opps),
+            'opportunities':    visible_opps[:50],
+            'total':            len(visible_opps),
             'profitable':       len(profitable),
-            'best_profit_usd':  opps[0]['netProfitUsd'] if opps else 0,
+            'best_profit_usd':  best_profit,
             'avg_spread':       avg_spread,
+            'rejected_count':   rejected_count,
             'pool_universe':    len(all_pairs),
             'bucket_count':     stats['bucket_count'],
             'gas_estimate_usd': round(gas_usd, 4),

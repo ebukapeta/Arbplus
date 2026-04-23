@@ -112,23 +112,25 @@ def get_v3_liquidity_state(
 
 def verify_reserve_freshness(reserves: dict) -> tuple:
     """
-    Check if V2 reserves are fresh enough to trade.
-    Returns (is_fresh: bool, reason: str).
+    Check if V2 reserves are valid.
+    Returns (is_valid: bool, reason: str).
+
+    NOTE: We do NOT reject based on blockTimestampLast age.
+    A pool that hasn't had a swap in the last N minutes is still a valid,
+    tradeable pool — it simply hasn't been touched recently.
+    blockTimestampLast only reflects the last swap, not pool health.
+    The only real dead-pool signals are zero reserves.
     """
     if reserves is None:
         return False, "could not fetch reserves"
 
-    age = reserves.get('age_seconds', 999_999)
-    r0  = reserves.get('reserve0', 0)
-    r1  = reserves.get('reserve1', 0)
+    r0 = reserves.get('reserve0', 0)
+    r1 = reserves.get('reserve1', 0)
 
     if r0 == 0 or r1 == 0:
         return False, "zero reserves — pool is empty or drained"
 
-    if age > MAX_RESERVE_AGE_SECONDS:
-        return False, f"reserves are {age}s old — pool is stale (max {MAX_RESERVE_AGE_SECONDS}s)"
-
-    return True, "fresh"
+    return True, "reserves valid"
 
 
 def get_pair_contract_reserves(
