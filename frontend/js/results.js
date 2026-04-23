@@ -77,8 +77,12 @@ const ResultsManager = (() => {
   }
 
   function _renderCard(opp) {
-    const isProfitable  = opp.status === 'profitable';
-    const isMarginal    = opp.status === 'marginal';
+    const execStatus    = opp.executionStatus || opp.status;
+    const isProfitable  = execStatus === 'profitable';
+    const isCandidate   = execStatus === 'candidate';
+    const isVerified    = execStatus === 'verified';
+    const isMarginal    = execStatus === 'marginal';
+    const isRejected    = execStatus === 'rejected';
     const spreadClass   = opp.spread > 2 ? 'good' : '';
     const baseColor     = getTokenColor(opp.baseToken  || '');
     const quoteColor    = getTokenColor(opp.quoteToken || '');
@@ -91,7 +95,7 @@ const ResultsManager = (() => {
     const feeW      = Math.min(100 - netW, (totalCost / gross) * 100);
     const gasW      = Math.max(0, 100 - netW - feeW);
 
-    const canExecute = isProfitable && WalletManager.isConnected();
+    const canExecute = (isProfitable || isVerified) && WalletManager.isConnected() && !isRejected;
 
     // Provider label — auto-selected by backend
     const providerLabel = opp.flashLoanProvider || 'Auto';
@@ -111,8 +115,13 @@ const ResultsManager = (() => {
         <span class="provider-badge">⚡ ${providerLabel}</span>
       </div>
     </div>
-    <div class="profit-badge ${opp.status}">
-      ${isProfitable ? '✓ Profitable' : isMarginal ? '~ Marginal' : '✗ Loss'}
+    <div class="profit-badge ${execStatus}">
+      ${isProfitable  ? '✓ Execution Ready'
+      : isVerified    ? '⚡ Verified'
+      : isCandidate   ? '◎ Candidate'
+      : isMarginal    ? '~ Marginal'
+      : isRejected    ? '✗ Rejected'
+      : '✗ Loss'}
     </div>
   </div>
 
