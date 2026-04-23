@@ -549,5 +549,79 @@ class DexScreenerScanner:
             'scan_timestamp':   int(__import__('time').time()),
         }
 
+    def _verify_opportunities(self, opps: list, w3) -> list:
+        """
+        Run on-chain verification for each opportunity.
+        Uses reserve_fetcher and router_validator.
+        Max 8 verifications per scan to limit RPC latency.
+        """
+        if not _reserve_fetcher or not _router_validator or not _execution_engine:
+            return opps
+
+        routers   = getattr(self, '_dex_routers', {})
+        price_map = {k.upper(): v for k, v in getattr(self, 'PRICE_FALLBACKS', {}).items()}
+
+        verified_count = 0
+        MAX_VERIFY     = 8
+
+        for opp in opps:
+            if verified_count >= MAX_VERIFY:
+                break
+            if opp.get('executionStatus') == 'rejected':
+                continue
+
+            spread      = opp.get('spread', 0)
+            pool_addr   = opp.get('poolAddress', '')
+            buy_router  = routers.get(opp['buyDex'],  '')
+            sell_router = routers.get(opp['sellDex'], '')
+            base_token  = opp.get('baseToken', '')
+            base_price  = price_map.get(base_token.upper(), 1.0)
+            loan_usd    = opp.get('flashLoanAmountUsd', 200)
+
+            # Step 1: Flash loan size check (no RPC needed)
+            size_ok, size_reason = _execution_engine.verify_flashloan_size_limits(
+                opp, self._flash_providers
+            )
+            if not size_ok:
+                _execution_engine.mark_rejected(opp, size_reason)
+                logger.info(f"  REJECTED {opp['pair']}: {size_reason}")
+                continue
+
+            # Step 2: Reserve freshness (requires pool address)
+            if pool_addr and len(pool_addr) > 10:
+                reserves = _reserve_fetcher.get_pair_contract_reserves(
+                    w3, pool_addr,
+                    opp.get('baseTokenAddress', ''),
+                    opp.get('quoteTokenAddress', ''),
+                )
+                if not reserves['valid']:
+                    _execution_engine.mark_rejected(opp, reserves['reason'])
+                    logger.info(f"  REJECTED {opp['pair']}: {reserves['reason']}")
+                    verified_count += 1
+                    continue
+
+            # Step 3: Router validation (requires both routers known)
+            if buy_router and sell_router:
+                result = _router_validator.verify_router_execution(
+                    w3, buy_router, sell_router,
+                    opp.get('baseTokenAddress', ''),
+                    opp.get('quoteTokenAddress', ''),
+                    loan_usd, base_price, spread,
+                )
+                verified_count += 1
+                if not result['valid']:
+                    _execution_engine.mark_rejected(opp, result['reason'])
+                    logger.info(f"  REJECTED {opp['pair']}: {result['reason']}")
+                    continue
+                _execution_engine.mark_verified(opp, result['confirmed_spread'])
+                _execution_engine.mark_execution_ready(opp)
+                logger.info(f"  VERIFIED {opp['pair']}: {result['reason']}")
+            else:
+                # Router not in our table — leave as candidate, don't reject
+                opp['executionStatus'] = 'candidate'
+                opp['status']          = 'candidate'
+
+        return opps
+
     def execute_trade(self, opportunity: dict, wallet_address: str, contract_address: str) -> dict:
         return {'status': 'error', 'error': 'execute_trade not implemented in base class'}
