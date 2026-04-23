@@ -76,6 +76,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Clear stale results immediately on chain switch
       ResultsManager.clear();
+      // Load saved contract address for this chain
+      ScannerAPI.fetchConfig();
 
       const cfg = activeCfg();
       const isTestnetActive = effectiveIsTestnet(AppState.network);

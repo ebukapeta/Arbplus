@@ -142,8 +142,8 @@ const ScannerAPI = (() => {
     if (!contractAddr) throw new Error('Contract address not set. Go to Scanner Config tab and enter your deployed contract address.');
     // Basic Ethereum address validation before sending to backend
     if (!/^0x[0-9a-fA-F]{40}$/.test(contractAddr)) throw new Error(`Invalid contract address: "${contractAddr}". Must be a 42-character hex address starting with 0x.`);
-    // Persist whenever we use it
-    localStorage.setItem('arbpulse_contract_address', contractAddr);
+    // Persist per-chain whenever we use it
+    localStorage.setItem(_contractKey(), contractAddr);
 
     const network   = AppState.network;
     const isTestnet = network === 'eth' && AppState.isTestnet;
@@ -179,23 +179,45 @@ const ScannerAPI = (() => {
     await fetch(`${BASE}/api/history`, { method: 'DELETE' });
   }
 
+  // ── Per-chain contract address storage ─────────────────────────────────
+  // Key format: arbpulse_contract_<network>  e.g. arbpulse_contract_bsc
+  // Testnet key: arbpulse_contract_eth_testnet
+  function _contractKey() {
+    const net = AppState.network;
+    const test = net === 'eth' && AppState.isTestnet;
+    return `arbpulse_contract_${net}${test ? '_testnet' : ''}`;
+  }
+
+  function _saveContractAddress() {
+    const val = document.getElementById('cfg-contract')?.value?.trim() || '';
+    if (val && /^0x[0-9a-fA-F]{40}$/.test(val)) {
+      localStorage.setItem(_contractKey(), val);
+    }
+  }
+
+  function _loadContractAddress() {
+    const input = document.getElementById('cfg-contract');
+    if (!input) return;
+    const saved = localStorage.getItem(_contractKey()) || '';
+    input.value = saved;
+  }
+
   async function fetchConfig() {
     try {
       const resp = await fetch(`${BASE}/api/config`);
       const data = await resp.json();
       const input = document.getElementById('cfg-contract');
-      if (input && !input.value) {
-        // First try localStorage, then fall back to backend env config
-        const saved = localStorage.getItem('arbpulse_contract_address') || '';
-        const addr  = saved || data[`${AppState.network}ContractAddress`] || data.bscContractAddress || '';
+      if (!input) return;
+      // Load saved address for this specific chain first
+      const saved = localStorage.getItem(_contractKey()) || '';
+      if (saved) {
+        input.value = saved;
+      } else {
+        // Fall back to backend env config if nothing saved yet
+        const addr = data[`${AppState.network}ContractAddress`] || '';
         if (addr) input.value = addr;
       }
     } catch {}
-  }
-
-  function _saveContractAddress() {
-    const val = document.getElementById('cfg-contract')?.value?.trim() || '';
-    if (val) localStorage.setItem('arbpulse_contract_address', val);
   }
 
   // Persist contract address whenever user types into the field
