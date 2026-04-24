@@ -607,6 +607,13 @@ class DexScreenerScanner:
                     continue
 
             # Step 3: Router validation (requires both routers known)
+            # Use _resolve_router if available (chain subclasses), else routers.get()
+            if not buy_router or not sell_router:
+                resolve = getattr(self, '_resolve_router', None)
+                if resolve:
+                    buy_router  = resolve(opp['buyDex'])
+                    sell_router = resolve(opp['sellDex'])
+
             if buy_router and sell_router:
                 result = _router_validator.verify_router_execution(
                     w3, buy_router, sell_router,
@@ -616,8 +623,13 @@ class DexScreenerScanner:
                 )
                 verified_count += 1
                 if not result['valid']:
-                    _execution_engine.mark_rejected(opp, result['reason'])
-                    logger.info(f"  REJECTED {opp['pair']}: {result['reason']}")
+                    # candidate = unverified but still showable; rejected = confirmed bad
+                    if result.get('status') == 'candidate':
+                        opp['executionStatus'] = 'candidate'
+                        opp['status']          = 'candidate'
+                    else:
+                        _execution_engine.mark_rejected(opp, result['reason'])
+                        logger.info(f"  REJECTED {opp['pair']}: {result['reason']}")
                     continue
                 _execution_engine.mark_verified(opp, result['confirmed_spread'])
                 _execution_engine.mark_execution_ready(opp)

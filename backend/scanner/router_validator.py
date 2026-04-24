@@ -154,12 +154,14 @@ def verify_router_execution(
       reason          : str
       confirmed_spread: float  (router-confirmed spread %)
     """
-    # Gate 1: reject obviously stale spreads immediately (no RPC call needed)
+    # Gate 1: if spread is very high, skip router verification (it will always
+    # fail for stale data) but mark as candidate, not rejected — the user
+    # can still attempt execution and the on-chain contract will protect them.
     if dexscreener_spread_pct > MAX_UNVERIFIED_SPREAD_PCT:
         return {
             'valid':            False,
-            'status':           'rejected',
-            'reason':           f'spread {dexscreener_spread_pct:.2f}% exceeds {MAX_UNVERIFIED_SPREAD_PCT}% ceiling — likely stale DexScreener data',
+            'status':           'candidate',
+            'reason':           f'spread {dexscreener_spread_pct:.2f}% above {MAX_UNVERIFIED_SPREAD_PCT}% — skipping router check, marked as candidate',
             'confirmed_spread': 0.0,
         }
 
@@ -193,8 +195,8 @@ def verify_router_execution(
     if confirmed_spread < min_required:
         return {
             'valid':            False,
-            'status':           'rejected',
-            'reason':           f'router confirms only {confirmed_spread:.3f}% spread vs {dexscreener_spread_pct:.3f}% reported — spread is mostly stale',
+            'status':           'candidate',
+            'reason':           f'router confirms only {confirmed_spread:.3f}% vs {dexscreener_spread_pct:.3f}% reported — marked as candidate',
             'confirmed_spread': round(confirmed_spread, 4),
         }
 
