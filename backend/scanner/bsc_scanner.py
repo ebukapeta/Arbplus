@@ -36,8 +36,6 @@ DEX_ROUTERS_MAINNET = {
     'KnightSwap':      '0x05E61E0cDcD2170a76F9568a110CEe3AFdD6c46f',
     'SushiSwap':       '0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506',
     'Nomiswap':        '0xD654953D746f0b114d1F85332Dc43446ac79413d',
-    'Squadswap':       '0xA07c5b74C9B40447a954e1466938b865b6BBea36',  # Squadswap BSC router
-    'Uniswap V3':      '0x1b81D678ffb9C0263b24A97847620C99d213eB14',  # PancakeSwap V3 is the Uniswap V3 fork on BSC
 }
 DEX_ROUTERS_TESTNET = {
     'PancakeSwap V2 Testnet': '0xD99D1c33F9fC3444f8101754aBC46c52416550D1',
@@ -91,7 +89,6 @@ class BSCScanner(DexScreenerScanner):
         'pancakeswap-amm-v3':       'PancakeSwap V3',
         'pancakeswap-amm':          'PancakeSwap V2',
         'pancakeswap-v2':           'PancakeSwap V2',
-        'pancakeswap':              'PancakeSwap V2',
         'biswap':                   'BiSwap',
         'apeswap':                  'ApeSwap',
         'thena':                    'Thena',
@@ -108,10 +105,6 @@ class BSCScanner(DexScreenerScanner):
         'dodo':                     'DODO',
         'acryptosswap':             'ACryptoS',
         'uniswap-v3':               'Uniswap V3',
-        'uniswap':                  'Uniswap V3',
-        'squadswap':                'Squadswap',
-        'squadswap-v2':             'Squadswap',
-        'squadswap-v3':             'Squadswap',
         # Testnet mappings
         'pancakeswap-v2-testnet':   'PancakeSwap V2 Testnet',
     }
@@ -159,26 +152,6 @@ class BSCScanner(DexScreenerScanner):
             except Exception as e:
                 logger.debug(f"BSC RPC {url}: {e}")
 
-    def _resolve_router(self, dex_name: str) -> str:
-        """
-        Resolve a DEX name to its router address.
-        Tries exact match first, then case-insensitive, then partial match.
-        """
-        routers = self._dex_routers
-        # Exact match
-        if dex_name in routers:
-            return routers[dex_name]
-        # Case-insensitive exact
-        lower = dex_name.lower()
-        for key, addr in routers.items():
-            if key.lower() == lower:
-                return addr
-        # Partial match — dex_name is contained in a router key
-        for key, addr in routers.items():
-            if lower in key.lower() or key.lower() in lower:
-                return addr
-        return ''
-
     def execute_trade(self, opportunity: dict, wallet_address: str, contract_address: str) -> dict:
         if not self.w3:
             self._connect()
@@ -193,13 +166,13 @@ class BSCScanner(DexScreenerScanner):
             quote_addr = Web3.to_checksum_address(opportunity['quoteTokenAddress'].lower())
             flash_amt  = int(opportunity['flashLoanAmount'] * 1e18)
             min_profit = int(opportunity.get('netProfit', 0) * 0.9 * 1e18)
-            deadline   = int(time.time()) + 1200  # 20 min — allow time for block inclusion
+            deadline   = int(time.time()) + 180
 
-            # Get router addresses — try exact match first, then case-insensitive partial
-            buy_router_raw  = self._resolve_router(opportunity['buyDex'])
-            sell_router_raw = self._resolve_router(opportunity['sellDex'])
+            # Get router addresses
+            buy_router_raw  = self._dex_routers.get(opportunity['buyDex'],  '')
+            sell_router_raw = self._dex_routers.get(opportunity['sellDex'], '')
             if not buy_router_raw or not sell_router_raw:
-                return {'status': 'error', 'error': f"Router not found for {opportunity['buyDex']} or {opportunity['sellDex']}. Add it to BSC DEX_ROUTERS_MAINNET."}
+                return {'status': 'error', 'error': f"Router not found for {opportunity['buyDex']} or {opportunity['sellDex']}"}
 
             tx = contract.functions.executeArbitrage(
                 base_addr, flash_amt,
@@ -211,7 +184,7 @@ class BSCScanner(DexScreenerScanner):
             ).build_transaction({
                 'from':     Web3.to_checksum_address(wallet_address.lower()),
                 'gas':      600_000,
-                'gasPrice': max(self.w3.eth.gas_price, 2_000_000_000),  # min 2 gwei
+                'gasPrice': self.w3.eth.gas_price,
                 'nonce':    self.w3.eth.get_transaction_count(
                     Web3.to_checksum_address(wallet_address.lower())
                 ),

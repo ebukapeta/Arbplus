@@ -130,19 +130,6 @@ class ETHScanner(DexScreenerScanner):
             except Exception as e:
                 logger.debug(f"ETH RPC {url}: {e}")
 
-    def _resolve_router(self, dex_name: str) -> str:
-        routers = self._dex_routers
-        if dex_name in routers:
-            return routers[dex_name]
-        lower = dex_name.lower()
-        for key, addr in routers.items():
-            if key.lower() == lower:
-                return addr
-        for key, addr in routers.items():
-            if lower in key.lower() or key.lower() in lower:
-                return addr
-        return ''
-
     def execute_trade(self, opportunity: dict, wallet_address: str, contract_address: str) -> dict:
         if not self.w3:
             self._connect()
@@ -154,10 +141,10 @@ class ETHScanner(DexScreenerScanner):
             quote_addr = Web3.to_checksum_address(opportunity['quoteTokenAddress'].lower())
             flash_amt  = int(opportunity['flashLoanAmount'] * 1e18)
             min_profit = int(opportunity.get('netProfit', 0) * 0.9 * 1e18)
-            deadline   = int(time.time()) + 1200
+            deadline   = int(time.time()) + 180
             provider_id= 1 if 'Balancer' in opportunity.get('flashLoanProvider', '') else 0
-            buy_router  = self._resolve_router(opportunity['buyDex'])
-            sell_router = self._resolve_router(opportunity['sellDex'])
+            buy_router  = self._dex_routers.get(opportunity['buyDex'],  '')
+            sell_router = self._dex_routers.get(opportunity['sellDex'], '')
             if not buy_router or not sell_router:
                 return {'status':'error','error':f"Router not found for {opportunity['buyDex']} or {opportunity['sellDex']}"}
             tx = contract.functions.executeArbitrage(
@@ -168,7 +155,7 @@ class ETHScanner(DexScreenerScanner):
                 min_profit, deadline, provider_id,
             ).build_transaction({
                 'from': Web3.to_checksum_address(wallet_address.lower()),
-                'gas': 500_000, 'gasPrice': max(self.w3.eth.gas_price, 2_000_000_000),  # min 2 gwei
+                'gas': 500_000, 'gasPrice': self.w3.eth.gas_price,
                 'nonce': self.w3.eth.get_transaction_count(Web3.to_checksum_address(wallet_address.lower())),
             })
             return {'status':'ready','unsignedTx':{'to':tx['to'],'data':tx['data'],'gas':hex(tx['gas']),'gasPrice':hex(tx['gasPrice']),'nonce':hex(tx['nonce']),'value':'0x0','chainId':11155111 if self.testnet else 1}}
