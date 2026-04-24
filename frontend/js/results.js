@@ -95,7 +95,9 @@ const ResultsManager = (() => {
     const feeW      = Math.min(100 - netW, (totalCost / gross) * 100);
     const gasW      = Math.max(0, 100 - netW - feeW);
 
-    const canExecute = (isProfitable || isVerified) && WalletManager.isConnected() && !isRejected;
+    // Candidates are executable — passed DexScreener filter but not yet
+    // router-verified. Only Rejected is never executable.
+    const canExecute = (isProfitable || isVerified || isCandidate) && WalletManager.isConnected() && !isRejected;
 
     // Provider label — auto-selected by backend
     const providerLabel = opp.flashLoanProvider || 'Auto';
