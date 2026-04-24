@@ -76,6 +76,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Clear stale results immediately on chain switch
       ResultsManager.clear();
+      // Clear contract address field immediately so old chain's address
+      // doesn't show while the async fetchConfig loads the new one
+      const contractInput = document.getElementById('cfg-contract');
+      if (contractInput) contractInput.value = '';
       // Load saved contract address for this chain
       ScannerAPI.fetchConfig();
 

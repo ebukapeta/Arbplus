@@ -188,11 +188,19 @@ const ScannerAPI = (() => {
     return `arbpulse_contract_${net}${test ? '_testnet' : ''}`;
   }
 
+  // Track which network the input was last loaded for
+  // so blur events after a network switch don't save the old address under the new chain
+  let _inputLoadedForNetwork = null;
+  let _inputLoadedForTestnet  = null;
+
   function _saveContractAddress() {
     const val = document.getElementById('cfg-contract')?.value?.trim() || '';
-    if (val && /^0x[0-9a-fA-F]{40}$/.test(val)) {
-      localStorage.setItem(_contractKey(), val);
-    }
+    if (!val || !/^0x[0-9a-fA-F]{40}$/.test(val)) return;
+    // Only save under the network that was active when this address was loaded/typed
+    const net    = _inputLoadedForNetwork || AppState.network;
+    const isTest = (_inputLoadedForTestnet !== null) ? _inputLoadedForTestnet : (AppState.network === 'eth' && AppState.isTestnet);
+    const key    = `arbpulse_contract_${net}${isTest ? '_testnet' : ''}`;
+    localStorage.setItem(key, val);
   }
 
   function _loadContractAddress() {
@@ -210,12 +218,15 @@ const ScannerAPI = (() => {
       if (!input) return;
       // Load saved address for this specific chain first
       const saved = localStorage.getItem(_contractKey()) || '';
+      // Record which network this address belongs to
+      _inputLoadedForNetwork = AppState.network;
+      _inputLoadedForTestnet = AppState.network === 'eth' && AppState.isTestnet;
       if (saved) {
         input.value = saved;
       } else {
         // Fall back to backend env config if nothing saved yet
         const addr = data[`${AppState.network}ContractAddress`] || '';
-        if (addr) input.value = addr;
+        input.value = addr || '';
       }
     } catch {}
   }
@@ -224,6 +235,11 @@ const ScannerAPI = (() => {
   document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById('cfg-contract');
     if (input) {
+      // When user focuses the field, lock the network association to the current network
+      input.addEventListener('focus', () => {
+        _inputLoadedForNetwork = AppState.network;
+        _inputLoadedForTestnet = AppState.network === 'eth' && AppState.isTestnet;
+      });
       input.addEventListener('change', _saveContractAddress);
       input.addEventListener('blur',   _saveContractAddress);
     }
