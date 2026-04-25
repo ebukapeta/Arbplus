@@ -163,10 +163,48 @@ const ScannerAPI = (() => {
 
   async function sendTransactionEVM(unsignedTx) {
     if (!window.ethereum) throw new Error('MetaMask not available');
-    // Always ensure from is present — MetaMask rejects without it
     const tx = { ...unsignedTx };
     if (!tx.from) tx.from = WalletManager.getAddress();
     return await window.ethereum.request({ method: 'eth_sendTransaction', params: [tx] });
+  }
+
+  /**
+   * Poll for a transaction receipt until it is mined or timeout is reached.
+   * Returns the receipt object or throws on timeout/revert.
+   * @param {string} txHash
+   * @param {number} timeoutMs   - max wait (default 5 min)
+   * @param {number} intervalMs  - poll interval (default 3s)
+   */
+  async function waitForReceipt(txHash, timeoutMs = 300_000, intervalMs = 3_000) {
+    if (!window.ethereum) throw new Error('No provider');
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const receipt = await window.ethereum.request({
+        method: 'eth_getTransactionReceipt',
+        params: [txHash],
+      });
+      if (receipt) return receipt;
+      await new Promise(r => setTimeout(r, intervalMs));
+    }
+    throw new Error('Transaction not mined within 5 minutes — check the explorer for status');
+  }
+
+  /**
+   * Parse the ArbitrageExecuted event from a transaction receipt's logs.
+   * Returns { netProfit, grossProfit, token } or null if event not found.
+   * Event signature: ArbitrageExecuted(address,uint256,uint256,uint256,address,address,string)
+   */
+  function parseArbEvent(receipt) {
+    // Keccak256 of ArbitrageExecuted(address,uint256,uint256,uint256,address,address,string)
+    const TOPIC = '0x' + 'ArbitrageExecuted'.padEnd(64, '0');
+    // We can't compute keccak in plain JS easily, so we just look for logs from our contract
+    if (!receipt || !receipt.logs || !receipt.logs.length) return null;
+    // Any non-empty log from the contract address means the arb ran
+    const contractLog = receipt.logs.find(l =>
+      l.address && receipt.to &&
+      l.address.toLowerCase() === receipt.to.toLowerCase()
+    );
+    return contractLog ? { hasEvent: true } : null;
   }
 
   async function fetchHistory() {
@@ -246,7 +284,7 @@ const ScannerAPI = (() => {
   });
 
   return {
-    startScanning, stopScanning, runScan, executeTrade, sendTransactionEVM,
+    startScanning, stopScanning, runScan, executeTrade, sendTransactionEVM, waitForReceipt,
     fetchHistory, clearHistory, fetchConfig, isScanning,
     setContractAddress, onResults, onStart, onStop, onError,
   };

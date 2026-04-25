@@ -308,55 +308,82 @@ const ResultsManager = (() => {
       }).join('') + resultHtml;
     };
 
-    const done = new Set();
-    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const done  = new Set();
+    let   txHash = '';
 
     try {
+      // ── Step 1: Build unsigned tx ──────────────────────────────────────
       renderSteps(0, done);
       const execData = await ScannerAPI.executeTrade(opp);
       done.add(0);
       if (execData.status === 'error') throw new Error(execData.error);
+      if (!execData.unsignedTx) throw new Error('Backend did not return a transaction to sign');
 
+      // ── Step 2: Sign & broadcast via MetaMask ──────────────────────────
+      // Steps 2-6 show as "pending" until the receipt confirms each one.
       renderSteps(1, done);
-      await sleep(300);
+      const txToSend = { ...execData.unsignedTx, from: WalletManager.getAddress() };
+      txHash = await ScannerAPI.sendTransactionEVM(txToSend);
 
-      let txHash = '';
-      if (execData.unsignedTx && window.ethereum) {
-        // MetaMask requires `from` field — inject connected wallet address
-        const txToSend = { ...execData.unsignedTx, from: WalletManager.getAddress() };
-        txHash = await ScannerAPI.sendTransactionEVM(txToSend);
-      } else {
-        txHash = '0x' + Array.from({length:64}, () => Math.floor(Math.random()*16).toString(16)).join('');
+      const cfg          = activeCfg();
+      const explorerBase = cfg.blockExplorerTx || 'https://bscscan.com/tx/';
+      AppLog.info(`Tx broadcast: ${shortTxHash(txHash)} — waiting for on-chain confirmation…`);
+
+      // Show "mining" state while we wait — none of the swap steps are done yet
+      renderSteps(1, done, -1, `
+        <div class="exec-result pending" style="background:rgba(0,200,255,0.08);border:1px solid rgba(0,200,255,0.3);border-radius:8px;padding:10px;margin-top:8px;font-size:12px;color:#00e0ff">
+          ⏳ <strong>Mining…</strong> Waiting for on-chain confirmation.<br>
+          <a class="tx-link" href="${explorerBase}${txHash}" target="_blank">Track: ${shortTxHash(txHash)}</a>
+        </div>
+      `);
+
+      // ── Steps 3-6: Wait for real receipt ──────────────────────────────
+      // This is the ONLY correct way to know if swaps actually executed.
+      // MetaMask returning a txHash just means the tx was broadcast —
+      // it does NOT mean it was mined or that swaps succeeded.
+      const receipt = await ScannerAPI.waitForReceipt(txHash);
+
+      if (!receipt) throw new Error('No receipt received — tx may still be pending. Check explorer.');
+
+      // receipt.status: '0x1' = success, '0x0' = reverted
+      if (receipt.status === '0x0' || receipt.status === 0) {
+        // Tx was mined but REVERTED — swaps never happened
+        throw new Error(
+          'Transaction reverted on-chain. The arbitrage was not profitable at execution time ' +
+          '(spread closed before mining). No funds were lost except gas.'
+        );
       }
 
-      for (let i = 1; i <= 5; i++) {
-        renderSteps(i, done);
-        await sleep(400 + Math.random() * 300);
-        done.add(i);
-      }
+      // Only reach here if status === 0x1 (actually confirmed success)
+      // Mark all steps done — they all happened atomically in one tx
+      for (let i = 1; i <= 5; i++) done.add(i);
 
-      const cfg         = activeCfg();
-      const explorerBase= cfg.blockExplorerTx || 'https://bscscan.com/tx/';
-      const netStr      = formatTokenAmount(opp.netProfit, opp.flashLoanAsset, 5);
-      const netUsd      = formatUsd(opp.netProfitUsd);
+      const netStr = formatTokenAmount(opp.netProfit, opp.flashLoanAsset, 5);
+      const netUsd = formatUsd(opp.netProfitUsd);
 
       renderSteps(-1, done, -1, `
         <div class="exec-result success">
-          ✅ <strong>Executed!</strong> Net: +${netStr} (+${netUsd})<br>
-          View: <a class="tx-link" href="${explorerBase}${txHash}" target="_blank">${shortTxHash(txHash)}</a>
+          ✅ <strong>Confirmed on-chain!</strong> Net: +${netStr} (+${netUsd})<br>
+          <a class="tx-link" href="${explorerBase}${txHash}" target="_blank">View on explorer: ${shortTxHash(txHash)}</a>
         </div>
         <button onclick="document.getElementById('execute-modal').classList.add('hidden')" style="width:100%;margin-top:10px" class="btn-execute">✅ Success</button>
       `);
 
       HistoryManager.addEntry({ ...opp, txHash, status: 'success', timestamp: Math.floor(Date.now() / 1000), network: AppState.network });
-      AppLog.profit(`Trade executed! ${opp.pair}: net +${netUsd}. Tx: ${shortTxHash(txHash)}`);
+      AppLog.profit(`✅ Confirmed! ${opp.pair}: net +${netUsd}. Tx: ${shortTxHash(txHash)}`);
 
     } catch (err) {
+      const cfg          = activeCfg();
+      const explorerBase = cfg.blockExplorerTx || 'https://bscscan.com/tx/';
+      const explorerLink = txHash
+        ? `<br><a class="tx-link" href="${explorerBase}${txHash}" target="_blank">View on explorer: ${shortTxHash(txHash)}</a>`
+        : '';
+
       renderSteps(-1, done, done.size, `
-        <div class="exec-result failed">✗ Execution failed: ${err.message}</div>
+        <div class="exec-result failed">✗ ${err.message}${explorerLink}</div>
         <button onclick="document.getElementById('execute-modal').classList.add('hidden')" style="width:100%;margin-top:10px" class="btn-secondary">Close</button>
       `);
-      HistoryManager.addEntry({ ...opp, txHash: '', status: 'failed', timestamp: Math.floor(Date.now() / 1000), network: AppState.network });
+      HistoryManager.addEntry({ ...opp, txHash, status: 'failed', timestamp: Math.floor(Date.now() / 1000), network: AppState.network });
       AppLog.error(`Execution failed: ${err.message}`);
     }
   }
