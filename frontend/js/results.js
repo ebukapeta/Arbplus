@@ -83,7 +83,7 @@ const ResultsManager = (() => {
     const isVerified    = execStatus === 'verified';
     const isMarginal    = execStatus === 'marginal';
     const isRejected    = execStatus === 'rejected';
-    const isSuspect     = isCandidate && opp.spread > 10;
+
     const spreadClass   = opp.spread > 2 ? 'good' : '';
     const baseColor     = getTokenColor(opp.baseToken  || '');
     const quoteColor    = getTokenColor(opp.quoteToken || '');
@@ -121,10 +121,9 @@ const ResultsManager = (() => {
         <span class="provider-badge">⚡ ${providerLabel}</span>
       </div>
     </div>
-    <div class="profit-badge ${isSuspect ? 'suspect' : execStatus}">
+    <div class="profit-badge ${execStatus}">
       ${isProfitable  ? '✓ Execution Ready'
       : isVerified    ? '⚡ Verified'
-      : isCandidate && opp.spread > 10 ? '⚠ Suspect Data'
       : isCandidate   ? '◎ Candidate'
       : isMarginal    ? '~ Marginal'
       : isRejected    ? '✗ Rejected'
@@ -198,7 +197,7 @@ const ResultsManager = (() => {
     </div>
     <button class="btn-execute-trade" data-opp-id="${opp.id}"
       ${canExecute ? '' : 'disabled'}
-      title="${suspectCandidate ? 'Spread too high (' + opp.spread.toFixed(1) + '%) — likely two different tokens with same symbol. MetaMask will auto-cancel.' : !WalletManager.isConnected() ? 'Connect wallet to execute' : 'Not executable'}">
+      title="${!WalletManager.isConnected() ? 'Connect wallet to execute' : !canExecute ? 'Not executable' : ''}">
       ⚡ Execute
     </button>
   </div>
