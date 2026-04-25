@@ -83,6 +83,7 @@ const ResultsManager = (() => {
     const isVerified    = execStatus === 'verified';
     const isMarginal    = execStatus === 'marginal';
     const isRejected    = execStatus === 'rejected';
+    const isSuspect     = isCandidate && opp.spread > 10;
     const spreadClass   = opp.spread > 2 ? 'good' : '';
     const baseColor     = getTokenColor(opp.baseToken  || '');
     const quoteColor    = getTokenColor(opp.quoteToken || '');
@@ -95,9 +96,12 @@ const ResultsManager = (() => {
     const feeW      = Math.min(100 - netW, (totalCost / gross) * 100);
     const gasW      = Math.max(0, 100 - netW - feeW);
 
-    // Candidates are executable — passed DexScreener filter but not yet
-    // router-verified. Only Rejected is never executable.
-    const canExecute = (isProfitable || isVerified || isCandidate) && WalletManager.isConnected() && !isRejected;
+    // Candidates with spread > 10% are almost certainly fake data (two different
+    // tokens with the same symbol, stale indexed price, etc.)
+    // MetaMask will auto-cancel these because the contract simulation reverts.
+    const suspectCandidate = isCandidate && opp.spread > 10;
+    const canExecute = (isProfitable || isVerified || (isCandidate && !suspectCandidate))
+                       && WalletManager.isConnected() && !isRejected;
 
     // Provider label — auto-selected by backend
     const providerLabel = opp.flashLoanProvider || 'Auto';
@@ -117,9 +121,10 @@ const ResultsManager = (() => {
         <span class="provider-badge">⚡ ${providerLabel}</span>
       </div>
     </div>
-    <div class="profit-badge ${execStatus}">
+    <div class="profit-badge ${isSuspect ? 'suspect' : execStatus}">
       ${isProfitable  ? '✓ Execution Ready'
       : isVerified    ? '⚡ Verified'
+      : isCandidate && opp.spread > 10 ? '⚠ Suspect Data'
       : isCandidate   ? '◎ Candidate'
       : isMarginal    ? '~ Marginal'
       : isRejected    ? '✗ Rejected'
@@ -191,7 +196,11 @@ const ResultsManager = (() => {
         <div class="profit-bar-gas"  style="width:${gasW}%"></div>
       </div>
     </div>
-    <button class="btn-execute-trade" data-opp-id="${opp.id}" ${canExecute ? '' : 'disabled'}>⚡ Execute</button>
+    <button class="btn-execute-trade" data-opp-id="${opp.id}"
+      ${canExecute ? '' : 'disabled'}
+      title="${suspectCandidate ? 'Spread too high (' + opp.spread.toFixed(1) + '%) — likely two different tokens with same symbol. MetaMask will auto-cancel.' : !WalletManager.isConnected() ? 'Connect wallet to execute' : 'Not executable'}">
+      ⚡ Execute
+    </button>
   </div>
 </div>`;
   }
@@ -323,7 +332,15 @@ const ResultsManager = (() => {
       // Steps 2-6 show as "pending" until the receipt confirms each one.
       renderSteps(1, done);
       const txToSend = { ...execData.unsignedTx, from: WalletManager.getAddress() };
-      txHash = await ScannerAPI.sendTransactionEVM(txToSend);
+      try {
+        txHash = await ScannerAPI.sendTransactionEVM(txToSend);
+      } catch (metaMaskErr) {
+        // MetaMask error 4001 = user rejected/cancelled — tx never reached chain
+        if (metaMaskErr.code === 4001 || (metaMaskErr.message && metaMaskErr.message.includes('rejected'))) {
+          throw new Error('Transaction cancelled in MetaMask — nothing was sent to the network.');
+        }
+        throw metaMaskErr;
+      }
 
       const cfg          = activeCfg();
       const explorerBase = cfg.blockExplorerTx || 'https://bscscan.com/tx/';

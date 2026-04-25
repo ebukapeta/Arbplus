@@ -50,6 +50,7 @@ const NETWORK_CONFIG = {
       dexes: [
         'PancakeSwap V2','PancakeSwap V3','ApeSwap','BiSwap',
         'MDEX','BabySwap','Thena','KnightSwap','SushiSwap','Nomiswap',
+        'Squadswap','Uniswap V3',
       ],
     },
     // BSC testnet config kept for completeness but never activated by UI
