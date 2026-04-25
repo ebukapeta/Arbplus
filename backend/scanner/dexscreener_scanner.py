@@ -20,6 +20,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 _reserve_fetcher   = None
 _router_validator  = None
 _execution_engine  = None
+_geckoterm         = None
+_geckoterm         = None
 
 def _load_validators():
     global _reserve_fetcher, _router_validator, _execution_engine
@@ -28,9 +30,11 @@ def _load_validators():
             from . import reserve_fetcher  as _rf
             from . import router_validator as _rv
             from . import execution_engine as _ee
+            from . import geckoterm_fetcher as _gt
             _reserve_fetcher  = _rf
             _router_validator = _rv
             _execution_engine = _ee
+            _geckoterm        = _gt
         except Exception as e:
             logging.getLogger(__name__).warning(f"Validators not loaded: {e}")
 
@@ -113,6 +117,7 @@ def normalize_dex(raw_dex_id: str, alias_map: dict) -> str:
 def derive_opportunities(
     pairs: list,
     main_tokens: set,
+    known_base_addrs: dict = {},
     stable_symbols: set,
     dex_alias_map: dict,
     price_fallbacks: dict,
@@ -210,10 +215,24 @@ def derive_opportunities(
             skipped_nomatch += 1
             continue
 
-        loan_addr  = (pair.get('baseToken',  {}).get('address') or '') if base_is_main  else (pair.get('quoteToken', {}).get('address') or '')
-        quote_addr = (pair.get('quoteToken', {}).get('address') or '') if base_is_main  else (pair.get('baseToken',  {}).get('address') or '')
+        loan_addr  = (pair.get('baseToken',  {}).get('address') or '').lower() if base_is_main  else (pair.get('quoteToken', {}).get('address') or '').lower()
+        quote_addr = (pair.get('quoteToken', {}).get('address') or '').lower() if base_is_main  else (pair.get('baseToken',  {}).get('address') or '').lower()
 
-        key = f"{loan_asset}/{quote_asset}"
+        if not loan_addr or not quote_addr:
+            skipped_nomatch += 1
+            continue
+
+        # ADDRESS AUTHENTICITY CHECK
+        # The base token symbol must match our known address for that symbol.
+        # Fake tokens (same symbol, different address) are silently skipped.
+        # e.g. CAKE at 0xB9d... is skipped because our CAKE is 0x0E09...
+        known_addr = known_base_addrs.get(loan_asset.upper(), '')
+        if known_addr and loan_addr != known_addr.lower():
+            skipped_nomatch += 1
+            continue
+
+        # KEY BY ADDRESS PAIR — only same-token pools compared
+        key = f"{loan_addr}/{quote_addr}"
         bucket = buckets.setdefault(key, [])
         bucket.append({
             'dex':         dex_name,
@@ -277,7 +296,7 @@ def derive_opportunities(
 
         if net_profit_usd <= 0:
             near_misses.append({
-                'pair': key, 'buy_dex': buy['dex'], 'sell_dex': sell['dex'],
+                'pair': pair_display, 'buy_dex': buy['dex'], 'sell_dex': sell['dex'],
                 'spread': round(spread_pct, 4),
                 'gross_usd': round(gross_profit_usd, 3),
                 'fee_usd': round(total_fee_usd, 3),
@@ -289,9 +308,10 @@ def derive_opportunities(
         is_profitable = net_profit_usd >= min_net_profit_usd
         status = 'profitable' if is_profitable else 'marginal'
 
+        pair_display = f"{buy['loan_asset']}/{buy['quote_asset']}"
         opportunities.append({
             'id':                f"{buy['loan_asset']}_{buy['quote_asset']}_{buy['dex']}_{sell['dex']}_{int(time.time())}",
-            'pair':              key,
+            'pair':              pair_display,
             'baseToken':         buy['loan_asset'],
             'quoteToken':        buy['quote_asset'],
             'baseTokenAddress':  buy['loan_addr'],
@@ -433,7 +453,35 @@ class DexScreenerScanner:
                 seen[key] = True
                 unique.append(p)
 
-        logger.info(f"  Total unique pairs: {len(unique)}")
+        logger.info(f"  DexScreener unique pairs: {len(unique)}")
+
+        # ── GeckoTerminal second-source ───────────────────────────────────
+        _load_validators()
+        if _geckoterm:
+            try:
+                gt_pairs = _geckoterm.fetch_geckoterm_pairs(
+                    self.DEXSCREENER_CHAIN, base_tokens
+                )
+                if gt_pairs:
+                    # Merge GeckoTerminal pairs — deduplicate by pair address
+                    existing_addrs = {
+                        p.get('pairAddress', '').lower()
+                        for p in unique
+                        if p.get('pairAddress')
+                    }
+                    new_from_gt = [
+                        p for p in gt_pairs
+                        if p.get('pairAddress', '').lower() not in existing_addrs
+                    ]
+                    unique.extend(new_from_gt)
+                    logger.info(
+                        f"  GeckoTerminal added {len(new_from_gt)} new pools "
+                        f"(total: {len(unique)})"
+                    )
+            except Exception as e:
+                logger.warning(f"GeckoTerminal fetch failed (non-fatal): {e}")
+
+        logger.info(f"  Total unique pairs (DexScreener + GeckoTerminal): {len(unique)}")
         return unique
 
     def scan(self, config: dict) -> dict:
@@ -469,13 +517,14 @@ class DexScreenerScanner:
         flash_fee_pct     = cheapest_provider['fee_bps'] / 100
 
         opps, stats = derive_opportunities(
-            pairs           = all_pairs,
-            main_tokens     = set(t.upper() for t in list(self._base_tokens.keys())),
-            stable_symbols  = self.STABLE_SYMBOLS,
-            dex_alias_map   = self.DEX_ALIASES,
-            price_fallbacks = self.PRICE_FALLBACKS,
-            flash_fee_pct   = flash_fee_pct,
-            gas_usd         = gas_usd,
+            pairs            = all_pairs,
+            main_tokens      = set(t.upper() for t in list(self._base_tokens.keys())),
+            known_base_addrs = {sym.upper(): addr for sym, addr in self._base_tokens.items()},
+            stable_symbols   = self.STABLE_SYMBOLS,
+            dex_alias_map    = self.DEX_ALIASES,
+            price_fallbacks  = self.PRICE_FALLBACKS,
+            flash_fee_pct    = flash_fee_pct,
+            gas_usd          = gas_usd,
             min_net_profit_usd = 0.10,
             min_liquidity_usd  = min_liq_usd,
         )
@@ -571,8 +620,7 @@ class DexScreenerScanner:
         MAX_VERIFY     = 8
 
         for opp in opps:
-            if verified_count >= MAX_VERIFY:
-                break
+            pass  # No verification cap — all opportunities validated
             if opp.get('executionStatus') == 'rejected':
                 continue
 

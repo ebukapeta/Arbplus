@@ -35,6 +35,7 @@ DEX_ROUTERS_TESTNET = {
 
 class ETHScanner(DexScreenerScanner):
     DEXSCREENER_CHAIN = 'ethereum'
+    GECKO_CHAIN       = 'eth'        # GeckoTerminal uses 'eth' not 'ethereum'
     NETWORK_NAME      = 'Ethereum'
 
     BASE_TOKENS_MAINNET = {
