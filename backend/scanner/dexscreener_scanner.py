@@ -117,12 +117,12 @@ def normalize_dex(raw_dex_id: str, alias_map: dict) -> str:
 def derive_opportunities(
     pairs: list,
     main_tokens: set,
-    known_base_addrs: dict = {},
     stable_symbols: set,
     dex_alias_map: dict,
     price_fallbacks: dict,
     flash_fee_pct: float,
     gas_usd: float,
+    known_base_addrs: dict = {},
     min_net_profit_usd: float = 0.20,
     min_liquidity_usd: float = 30_000,
     loan_cap_ratio: float = 0.0025,
