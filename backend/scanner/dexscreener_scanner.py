@@ -294,6 +294,8 @@ def derive_opportunities(
         net_profit_usd    = gross_profit_usd - total_fee_usd - gas_usd
         net_pct           = (net_profit_usd / loan_usd * 100) if loan_usd > 0 else 0
 
+        pair_display = f"{buy['loan_asset']}/{buy['quote_asset']}"
+
         if net_profit_usd <= 0:
             near_misses.append({
                 'pair': pair_display, 'buy_dex': buy['dex'], 'sell_dex': sell['dex'],
@@ -307,8 +309,6 @@ def derive_opportunities(
 
         is_profitable = net_profit_usd >= min_net_profit_usd
         status = 'profitable' if is_profitable else 'marginal'
-
-        pair_display = f"{buy['loan_asset']}/{buy['quote_asset']}"
         opportunities.append({
             'id':                f"{buy['loan_asset']}_{buy['quote_asset']}_{buy['dex']}_{sell['dex']}_{int(time.time())}",
             'pair':              pair_display,
