@@ -96,11 +96,7 @@ const ResultsManager = (() => {
     const feeW      = Math.min(100 - netW, (totalCost / gross) * 100);
     const gasW      = Math.max(0, 100 - netW - feeW);
 
-    // Candidates with spread > 10% are almost certainly fake data (two different
-    // tokens with the same symbol, stale indexed price, etc.)
-    // MetaMask will auto-cancel these because the contract simulation reverts.
-    const suspectCandidate = isCandidate && opp.spread > 10;
-    const canExecute = (isProfitable || isVerified || (isCandidate && !suspectCandidate))
+    const canExecute = (isProfitable || isVerified || isCandidate || isMarginal)
                        && WalletManager.isConnected() && !isRejected;
 
     // Provider label — auto-selected by backend
