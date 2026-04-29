@@ -101,15 +101,19 @@ def parallel_fetch(fn, args_list: list, max_workers: int = 8, delay: float = 0.1
 # ── DEX name normalisation ────────────────────────────────────────────────────
 
 def normalize_dex(raw_dex_id: str, alias_map: dict) -> str:
+    """Return the display name for a DEX ID, or '' if unrecognised.
+
+    Returning '' causes the pair to be filtered out in derive_opportunities.
+    We do NOT auto-format unknown IDs — if a DEX is not in our alias map we
+    have no router address for it and cannot execute the trade.
+    """
     if not raw_dex_id:
         return ''
     key = raw_dex_id.strip().lower()
     import re as _re
     if _re.match(r'^0x[a-f0-9]{8,}$', key):
         return ''
-    if key in alias_map:
-        return alias_map[key]
-    return ' '.join(w.capitalize() for w in key.replace('-', ' ').replace('_', ' ').split())
+    return alias_map.get(key, '')   # strict lookup — unknown DEX → filtered out
 
 
 # ── Core opportunity derivation ───────────────────────────────────────────────
@@ -280,15 +284,23 @@ def derive_opportunities(
         loan_asset_usd    = token_usd.get(buy['loan_asset'], 1.0)
         loan_amt          = loan_usd / max(loan_asset_usd, 1e-9)
 
-        price_impact_pct  = (loan_usd / max(pair_liq_usd, 1)) * 100 * price_impact_mult
+        # Cap loan to 2% of pool liquidity to bound real slippage.
+        # DexScreener prices are spot (pre-trade), so large loans cause real slippage
+        # that compresses the spread — we handle this by capping loan size, NOT by
+        # adding a separate impact_fee (which would double-count the effect).
+        max_loan_usd = pair_liq_usd * 0.02   # hard cap: 2% of pool
+        loan_usd     = min(loan_usd, max_loan_usd)
 
-        # Fee components
-        # dex_fee_usd and flash_fee_usd both scale with loan_usd (volume-proportional)
-        # gas_usd is fixed regardless of loan size (fixed computation cost on-chain)
+        # Price impact estimation (stored for display only — NOT subtracted as a fee)
+        price_impact_pct  = (loan_usd / max(pair_liq_usd, 1)) * 100
+
+        # Fee components — only real cash outflows:
+        #   dex_fee_usd   : DEX swap fees (volume-proportional)
+        #   flash_fee_usd : flash loan provider fee (volume-proportional)
+        #   gas_usd       : fixed tx cost regardless of loan size
         dex_fee_usd       = loan_usd * (dex_fee_pct   / 100)
         flash_fee_usd     = loan_usd * (flash_fee_pct / 100)
-        impact_fee_usd    = loan_usd * (price_impact_pct / 100)
-        total_fee_usd     = dex_fee_usd + flash_fee_usd + impact_fee_usd
+        total_fee_usd     = dex_fee_usd + flash_fee_usd
 
         gross_profit_usd  = loan_usd * (spread_pct / 100)
         net_profit_usd    = gross_profit_usd - total_fee_usd - gas_usd

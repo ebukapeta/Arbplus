@@ -25,6 +25,17 @@ DEX_ROUTERS_MAINNET = {
     'Balancer V2 Arb':     '0xBA12222222228d8Ba445958a75a0704d566BF2C8',
     'Chronos':             '0xE708aA9E887980750C040a6A2Cb901c37Aa34f3b',
     'WOOFi Arb':           '0x9aEd3A8896A85FE9a8CAc52C9B402D092B629a30',
+    'Kyberswap Arb':       '0x6131B5fae19EA4f9D964eAc0408E4408b66337b5',
+    'Trader Joe V2.1':     '0xb4315e873dBcf96Ffd0acd8EA43f689D8c20fB30',
+    'Trader Joe V2.2':     '0x18556DA13313f3532c54711497A8FedAC273220E',
+    'Ramses V2':           '0xAAA87963EFeB6f7E0a2711F397663105Acb1805e',
+    'SushiSwap V3 Arb':    '0x8A21F6768C1f8075791D08546Dadf6A2C9F04f09',
+    'Uniswap V2 Arb':      '0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24',
+    'PancakeSwap V2 Arb':  '0x8cFe327CEc66d1C090Dd72bd0FF11d690C33a2Eb',
+    'Zyberswap V3':        '0xFa58b8024B49836772180f2Df902f231ba712F72',
+    'Curve Arb':           '0x960ea3e3C7FB317332d990873d354E18d7645590',
+    'DODO Arb':            '0x88CBf433471A0CD8240D2a12354362988b4593E5',
+    'Sterling Finance':    '0xF29Ef46231dF9F8C07a0EB2f60b8Be75D7a0dc6C',
 }
 DEX_ROUTERS_TESTNET = {
     'Uniswap V3 Arb Sepolia':  '0x101F443B4d1b059569D643917553c771E1b9663A',
@@ -90,14 +101,10 @@ class ArbitrumScanner(DexScreenerScanner):
         'chronos':              'Chronos',
         'chronos-v2':           'Chronos',
         'woofi-v2':             'WOOFi Arb',
-        'odos':                 'Odos',
         'gmx':                  'GMX',
         'gmx-v2':               'GMX',
         'dodo':                 'DODO Arb',
-        'kyberswap-elastic':    'Kyberswap Arb',
         'curve':                'Curve Arb',
-        'aave-v3':              'Aave V3 Arb',
-        'radiant':              'Radiant',
         # Additional IDs from live DexScreener ARB feeds
         'joe-v2-1':             'Trader Joe V2.1',
         'joe-v2-2':             'Trader Joe V2.2',
@@ -107,8 +114,6 @@ class ArbitrumScanner(DexScreenerScanner):
         'uniswap-v2':           'Uniswap V2 Arb',
         'pancakeswap-v2':       'PancakeSwap V2 Arb',
         'zyberswap-v3':         'Zyberswap V3',
-        'mycelium':             'Mycelium',
-        'swapfish':             'SwapFish',
         'sterling':             'Sterling Finance',
     }
 

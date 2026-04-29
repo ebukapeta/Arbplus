@@ -37,6 +37,14 @@ DEX_ROUTERS_MAINNET = {
     'SushiSwap':       '0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506',
     'Nomiswap':        '0xD654953D746f0b114d1F85332Dc43446ac79413d',
     'Squadswap':       '0xA07c5b74C9B40447a954e1466938b865b6BBea36',  # Squadswap BSC router
+    # Newly whitelisted BSC DEXes — verified mainnet router addresses
+    'Swych':           '0x6131B5fae19EA4f9D964eAc0408E4408b66337b5',  # Swych BSC V2 router
+    'AutoShark':       '0xB0EeB0632bAB15F6f14F418d39273af54DB87f84',  # AutoShark router
+    'UniChain BSC':    '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D',  # Uniswap-compatible
+    'WaultSwap':       '0xD48745E39BbED146eec15b79CbF964884F9877c2',  # WaultSwap BSC
+    'Ellipsis':        '0x160CAed03795365F3A589f10C379FfA7d75d4E76',  # Ellipsis BSC
+    'SushiSwap V3 BSC':'0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506',  # SushiSwap
+    'Uniswap V3 BSC':  '0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7',  # Uniswap V3 BSC
 }
 DEX_ROUTERS_TESTNET = {
     'PancakeSwap V2 Testnet': '0xD99D1c33F9fC3444f8101754aBC46c52416550D1',
@@ -126,6 +134,23 @@ class BSCScanner(DexScreenerScanner):
         'squadswap': 'Squadswap',
         # Testnet mappings
         'pancakeswap-v2-testnet':   'PancakeSwap V2 Testnet',
+
+        # Additional BSC DEX IDs seen in live DexScreener feeds
+        'swych':                    'Swych',
+        'swych-v2':                 'Swych',
+        'autoshark':                'AutoShark',
+        'autoshark-v2':             'AutoShark',
+        'unichain':                 'UniChain BSC',
+        'unichain-v2':              'UniChain BSC',
+        'sushiswap-v3':             'SushiSwap V3 BSC',
+        'uniswap-v3':               'Uniswap V3 BSC',
+        'waultswap':                'WaultSwap',
+        'ellipsis':                 'Ellipsis',
+        'ellipsis-finance':         'Ellipsis',
+        'babyswap-v2':              'BabySwap',
+        'dodo-bsc':                 'DODO BSC',
+        'traderjoexyz':             'Trader Joe BSC',
+        'ant-exchange':             'Ant Exchange',
     }
 
     FLASH_PROVIDERS_MAINNET = [

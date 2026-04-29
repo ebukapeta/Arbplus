@@ -79,24 +79,16 @@ class ETHScanner(DexScreenerScanner):
         'curve':              'Curve ETH',
         'curve-dex':          'Curve ETH',
         'dodo':               'DODO ETH',
-        'kyberswap-elastic':  'Kyberswap ETH',
         'kyberswap-classic':  'Kyberswap ETH',
         'maverick':           'Maverick',
         'maverick-v2':        'Maverick',
-        'bancor':             'Bancor',
         'dodo-v2':            'DODO ETH',
-        'odos':               'Odos',
-        'integral':           'Integral',
-        'clipper':            'Clipper',
         # Additional IDs from live DexScreener ETH feeds
-        'uniswap-v4':         'Uniswap V4',
         'sushiswap-v3':       'SushiSwap V3',
         'pancakeswap-v2':     'PancakeSwap V2',
-        'fluid':              'Fluid',
         'verse-dex':          'Verse DEX',
         'elk-finance':        'Elk Finance',
         'defiswap':           'DeFi Swap',
-        'radioshack':         'RadioShack',
     }
 
     FLASH_PROVIDERS_MAINNET = [
