@@ -24,11 +24,15 @@ BASE_URL = 'https://api.geckoterminal.com/api/v2'
 
 # GeckoTerminal chain slugs mapped from our internal chain names
 CHAIN_SLUGS = {
-    'bsc':     'bsc',
-    'eth':     'eth',
-    'arb':     'arbitrum',
-    'base':    'base',
-    'solana':  'solana',
+    # DexScreener chain IDs (what DEXSCREENER_CHAIN is set to in each scanner)
+    'bsc':       'bsc',
+    'ethereum':  'eth',      # ETH scanner uses DEXSCREENER_CHAIN = 'ethereum'
+    'arbitrum':  'arbitrum',
+    'base':      'base',
+    'solana':    'solana',
+    # Short aliases (kept for any direct callers)
+    'eth':       'eth',
+    'arb':       'arbitrum',
 }
 
 # DexID aliases — map GeckoTerminal dex_id to the same names our scanners use
@@ -136,9 +140,12 @@ def _normalise_pair(raw: dict, chain_slug: str) -> Optional[dict]:
         base_addr  = extract_addr(base_token)
         quote_addr = extract_addr(quote_token)
 
-        # Symbols from attributes
-        base_sym  = (attrs.get('name', '/').split('/')[0] or '').strip().upper()
-        quote_sym = (attrs.get('name', '/').split('/')[-1] or '').strip().upper()
+        # Symbols from attributes — pool name looks like "WETH / USDC" or "WETH/USDC"
+        raw_name  = attrs.get('name', '') or ''
+        # Normalise: strip spaces around slash, then split
+        name_parts = [p.strip() for p in raw_name.replace(' / ', '/').split('/')]
+        base_sym  = (name_parts[0] if len(name_parts) >= 1 else '').upper()
+        quote_sym = (name_parts[1] if len(name_parts) >= 2 else '').upper()
 
         pair_addr = raw.get('id', '').split('_')[-1] if raw.get('id') else ''
 
@@ -189,17 +196,19 @@ def fetch_top_pools_gecko(chain_slug: str, page: int = 1) -> list:
     return [p for p in (_normalise_pair(r, chain_slug) for r in data['data']) if p]
 
 
-def fetch_gecko_pairs(
+def fetch_geckoterm_pairs(
     chain: str,
     base_token_addresses: list,
     max_workers: int = 4,
     delay: float = 0.25,
 ) -> list:
     """
-    Main entry point. Fetches pairs for all base tokens in parallel.
+    Main entry point — name matches the call in dexscreener_scanner.py.
+    Fetches pairs for all base tokens in parallel.
     Returns de-duplicated list of normalised pair dicts.
 
-    chain: internal chain name ('bsc', 'eth', 'arb', 'base', 'solana')
+    chain: internal chain name (matches DEXSCREENER_CHAIN in each scanner,
+           e.g. 'ethereum', 'arbitrum', 'base', 'bsc', 'solana')
     """
     chain_slug = CHAIN_SLUGS.get(chain)
     if not chain_slug:
