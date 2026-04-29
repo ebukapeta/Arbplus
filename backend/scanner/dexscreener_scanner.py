@@ -371,6 +371,17 @@ class DexScreenerScanner:
     GAS_GWEI_TESTNET: float = 3.0
     NATIVE_PRICE_USD: float = 600.0
 
+    # ── Per-chain scanning parameters (overridden in each subclass) ───────────
+    # loan_cap_ratio: fraction of pool liquidity used as the flash loan.
+    # Needs to be high enough that gross profit >> gas cost.
+    # ETH gas is ~$28/tx → needs a bigger loan to amortise; L2s are cheap.
+    LOAN_CAP_RATIO:    float = 0.005    # 0.5% default
+    MIN_LIQUIDITY_USD: float = 20_000   # minimum pool size to consider
+    MIN_SPREAD_PCT:    float = 0.05     # minimum price-spread % to pass filter
+
+    # Extra stablecoin/WETH search queries added in _fetch_all_pairs (per chain)
+    STABLECOIN_SEARCH_QUERIES: list = []
+
     def __init__(self, testnet: bool = False):
         self.testnet = testnet
         label = 'Testnet' if testnet else 'Mainnet'
@@ -382,13 +393,17 @@ class DexScreenerScanner:
 
     @property
     def _flash_providers(self) -> list:
-        return self.FLASH_PROVIDERS_TESTNET if self.testnet else self.FLASH_PROVIDERS_MAINNET
+        # Sort ascending by fee_bps so lowest-fee provider (Balancer/DODO = 0bps)
+        # is always tried before Aave (5bps). Fixes flash-provider ordering bug.
+        providers = self.FLASH_PROVIDERS_TESTNET if self.testnet else self.FLASH_PROVIDERS_MAINNET
+        return sorted(providers, key=lambda p: p.get('fee_bps', 99))
 
     def _gas_usd(self) -> float:
         gwei = self.GAS_GWEI_TESTNET if self.testnet else self.GAS_GWEI_MAINNET
         return self.GAS_UNITS * gwei * 1e-9 * self.NATIVE_PRICE_USD
 
     def _select_flash_provider(self, base_sym: str) -> dict:
+        # Providers already sorted lowest-fee first via _flash_providers property.
         for p in self._flash_providers:
             supported = p.get('assets', [])
             if not supported or base_sym in supported:
@@ -437,6 +452,12 @@ class DexScreenerScanner:
         search_queries = []
         for sym in main_syms[:8]:
             search_queries += [sym, f"{sym}/USDT", f"{sym}/USDC"]
+        # Per-chain stablecoin/WETH pair queries (set in STABLECOIN_SEARCH_QUERIES).
+        # These target the highest-volume arb pairs on EVM chains that token-address
+        # searches often miss (e.g. "USDC/WETH", "USDT/USDC" across Uniswap/Curve).
+        for q in self.STABLECOIN_SEARCH_QUERIES:
+            if q not in search_queries:
+                search_queries.append(q)
         searched_pairs = parallel_fetch(
             fetch_search_pairs,
             [(chain, q) for q in search_queries],
@@ -459,8 +480,11 @@ class DexScreenerScanner:
         _load_validators()
         if _geckoterm:
             try:
+                # Use GECKO_CHAIN if scanner defines it (e.g. ETH: 'eth'),
+                # otherwise use DEXSCREENER_CHAIN (already handled by CHAIN_SLUGS).
+                gecko_chain = getattr(self, 'GECKO_CHAIN', self.DEXSCREENER_CHAIN)
                 gt_pairs = _geckoterm.fetch_geckoterm_pairs(
-                    self.DEXSCREENER_CHAIN, base_tokens
+                    gecko_chain, base_tokens
                 )
                 if gt_pairs:
                     # Merge GeckoTerminal pairs — deduplicate by pair address
@@ -488,7 +512,7 @@ class DexScreenerScanner:
         label        = 'Testnet' if self.testnet else 'Mainnet'
         base_tokens  = config.get('baseTokens', list(self._base_tokens.keys()))
         min_net_pct  = float(config.get('minNetProfitPct', 0.05))
-        min_liq_usd  = float(config.get('minLiquidityUsd', 30_000))
+        # min_liq_usd is resolved per-chain below (uses self.MIN_LIQUIDITY_USD)
 
         gas_usd = self._gas_usd()
         logger.info(
@@ -516,6 +540,13 @@ class DexScreenerScanner:
         cheapest_provider = self._flash_providers[0] if self._flash_providers else {'name':'Auto','fee_bps':5}
         flash_fee_pct     = cheapest_provider['fee_bps'] / 100
 
+        # Use per-chain tuned params (defined as class attrs, overridable via config).
+        loan_cap_ratio = float(config.get('loanCapRatio',    self.LOAN_CAP_RATIO))
+        min_liq_usd    = float(config.get('minLiquidityUsd', self.MIN_LIQUIDITY_USD))
+        min_spread_pct = float(config.get('minSpreadPct',    self.MIN_SPREAD_PCT))
+        # min gas-coverage net profit: scale with gas so we don't set ETH the same as Base
+        min_net_profit = max(0.10, gas_usd * 0.15)
+
         opps, stats = derive_opportunities(
             pairs            = all_pairs,
             main_tokens      = set(t.upper() for t in list(self._base_tokens.keys())),
@@ -525,8 +556,10 @@ class DexScreenerScanner:
             price_fallbacks  = self.PRICE_FALLBACKS,
             flash_fee_pct    = flash_fee_pct,
             gas_usd          = gas_usd,
-            min_net_profit_usd = 0.10,
+            min_net_profit_usd = min_net_profit,
             min_liquidity_usd  = min_liq_usd,
+            loan_cap_ratio     = loan_cap_ratio,
+            min_spread_pct     = min_spread_pct,
         )
 
         for opp in opps:

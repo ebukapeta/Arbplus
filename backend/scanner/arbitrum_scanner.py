@@ -40,6 +40,7 @@ DEX_ROUTERS_TESTNET = {
 
 class ArbitrumScanner(DexScreenerScanner):
     DEXSCREENER_CHAIN = 'arbitrum'
+    GECKO_CHAIN       = 'arbitrum'   # GeckoTerminal slug for Arbitrum
     NETWORK_NAME      = 'Arbitrum'
 
     BASE_TOKENS_MAINNET = {
@@ -97,6 +98,18 @@ class ArbitrumScanner(DexScreenerScanner):
         'curve':                'Curve Arb',
         'aave-v3':              'Aave V3 Arb',
         'radiant':              'Radiant',
+        # Additional IDs from live DexScreener ARB feeds
+        'joe-v2-1':             'Trader Joe V2.1',
+        'joe-v2-2':             'Trader Joe V2.2',
+        'joe-v21':              'Trader Joe V2.1',
+        'ramses-v2':            'Ramses V2',
+        'sushiswap-v3':         'SushiSwap V3 Arb',
+        'uniswap-v2':           'Uniswap V2 Arb',
+        'pancakeswap-v2':       'PancakeSwap V2 Arb',
+        'zyberswap-v3':         'Zyberswap V3',
+        'mycelium':             'Mycelium',
+        'swapfish':             'SwapFish',
+        'sterling':             'Sterling Finance',
     }
 
     FLASH_PROVIDERS_MAINNET = [
@@ -113,6 +126,17 @@ class ArbitrumScanner(DexScreenerScanner):
     GAS_GWEI_MAINNET = 0.1
     GAS_GWEI_TESTNET = 0.05
     NATIVE_PRICE_USD = 3500.0
+
+    # Per-chain scanning params — ARB gas ~$0.12, very cheap
+    LOAN_CAP_RATIO:    float = 0.006    # 0.6% of pool liquidity
+    MIN_LIQUIDITY_USD: float = 15_000
+    MIN_SPREAD_PCT:    float = 0.04     # 0.04% min spread
+
+    STABLECOIN_SEARCH_QUERIES: list = [
+        'USDC/WETH', 'USDT/WETH', 'USDC/USDT', 'ARB/WETH',
+        'WBTC/WETH', 'WBTC/USDC', 'GMX/WETH', 'FRAX/USDC',
+        'MAGIC/WETH', 'RDNT/WETH',
+    ]
 
     def __init__(self, testnet: bool = False):
         super().__init__(testnet)

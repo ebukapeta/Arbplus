@@ -37,7 +37,6 @@ DEX_ROUTERS_MAINNET = {
     'SushiSwap':       '0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506',
     'Nomiswap':        '0xD654953D746f0b114d1F85332Dc43446ac79413d',
     'Squadswap':       '0xA07c5b74C9B40447a954e1466938b865b6BBea36',  # Squadswap BSC router
-    'Uniswap V3':      '0x1b81D678ffb9C0263b24A97847620C99d213eB14',  # PancakeSwap V3 is the Uniswap V3 fork on BSC
 }
 DEX_ROUTERS_TESTNET = {
     'PancakeSwap V2 Testnet': '0xD99D1c33F9fC3444f8101754aBC46c52416550D1',
@@ -107,11 +106,24 @@ class BSCScanner(DexScreenerScanner):
         'ellipsis-finance':         'Ellipsis',
         'dodo':                     'DODO',
         'acryptosswap':             'ACryptoS',
-        'uniswap-v3':               'Uniswap V3',
-        'uniswap':                  'Uniswap V3',
+        'uniswap-v3':               'PancakeSwap V3',  # DexScreener labels PCS V3 as uniswap-v3 on BSC
+        'uniswap':                  'PancakeSwap V2',  # Generic uniswap → PCS V2 on BSC
         'squadswap':                'Squadswap',
         'squadswap-v2':             'Squadswap',
         'squadswap-v3':             'Squadswap',
+
+        # GeckoTerminal aliases (underscore_format → display name)
+        'pancakeswap_v2': 'PancakeSwap V2',
+        'pancakeswap_v3': 'PancakeSwap V3',
+        'biswap': 'BiSwap',
+        'apeswap': 'ApeSwap',
+        'mdex': 'MDEX',
+        'babyswap': 'BabySwap',
+        'thena': 'Thena',
+        'knightswap': 'KnightSwap',
+        'sushiswap': 'SushiSwap',
+        'nomiswap': 'Nomiswap',
+        'squadswap': 'Squadswap',
         # Testnet mappings
         'pancakeswap-v2-testnet':   'PancakeSwap V2 Testnet',
     }
