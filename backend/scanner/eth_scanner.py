@@ -88,15 +88,6 @@ class ETHScanner(DexScreenerScanner):
         'odos':               'Odos',
         'integral':           'Integral',
         'clipper':            'Clipper',
-        # Additional IDs from live DexScreener ETH feeds
-        'uniswap-v4':         'Uniswap V4',
-        'sushiswap-v3':       'SushiSwap V3',
-        'pancakeswap-v2':     'PancakeSwap V2',
-        'fluid':              'Fluid',
-        'verse-dex':          'Verse DEX',
-        'elk-finance':        'Elk Finance',
-        'defiswap':           'DeFi Swap',
-        'radioshack':         'RadioShack',
     }
 
     FLASH_PROVIDERS_MAINNET = [
@@ -113,19 +104,6 @@ class ETHScanner(DexScreenerScanner):
     GAS_GWEI_MAINNET = 20.0
     GAS_GWEI_TESTNET = 1.2
     NATIVE_PRICE_USD = 3500.0
-
-    # Per-chain scanning params — ETH gas ~$28 so needs bigger loans & pools
-    LOAN_CAP_RATIO:    float = 0.008    # 0.8% of pool liquidity
-    MIN_LIQUIDITY_USD: float = 50_000   # only high-liq pools worth the gas
-    MIN_SPREAD_PCT:    float = 0.08     # 0.08% min spread on ETH
-
-    # High-volume ETH stablecoin pairs (Uniswap V3, Curve) DexScreener often
-    # returns only when searched directly by pair name
-    STABLECOIN_SEARCH_QUERIES: list = [
-        'USDC/WETH', 'USDT/WETH', 'USDC/USDT', 'DAI/USDC',
-        'WBTC/WETH', 'WBTC/USDC', 'FRAX/USDC', 'LUSD/USDC',
-        'stETH/WETH', 'rETH/WETH',
-    ]
 
     def __init__(self, testnet: bool = False):
         super().__init__(testnet)

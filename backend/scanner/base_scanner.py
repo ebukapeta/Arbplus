@@ -40,7 +40,6 @@ DEX_ROUTERS_TESTNET = {
 
 class BaseScanner(DexScreenerScanner):
     DEXSCREENER_CHAIN = 'base'
-    GECKO_CHAIN       = 'base'       # GeckoTerminal slug for Base
     NETWORK_NAME      = 'Base'
 
     BASE_TOKENS_MAINNET = {
@@ -93,18 +92,6 @@ class BaseScanner(DexScreenerScanner):
         'extra-finance':        'Extra Finance',
         'moonwell':             'Moonwell',
         'bswap':                'BaseSwap',
-        # Additional IDs from live DexScreener Base feeds
-        'maverick-v2':          'Maverick V2',
-        'synapse':              'Synapse Base',
-        'sushiswap-v3':         'SushiSwap V3 Base',
-        'pancakeswap-v2':       'PancakeSwap V2 Base',
-        'velodrome-slipstream': 'Velodrome Slipstream',
-        'velodrome-v2':         'Velodrome V2',
-        'uniswap-v4':           'Uniswap V4 Base',
-        'horizon-dex':          'Horizon DEX',
-        'thick':                'Thick',
-        'kim-exchange':         'Kim Exchange',
-        'synthswap':            'SynthSwap',
     }
 
     FLASH_PROVIDERS_MAINNET = [
@@ -121,17 +108,6 @@ class BaseScanner(DexScreenerScanner):
     GAS_GWEI_MAINNET = 0.005
     GAS_GWEI_TESTNET = 0.001
     NATIVE_PRICE_USD = 3500.0
-
-    # Per-chain scanning params — Base gas ~$0.005, extremely cheap
-    LOAN_CAP_RATIO:    float = 0.008    # 0.8% of pool liquidity
-    MIN_LIQUIDITY_USD: float = 10_000
-    MIN_SPREAD_PCT:    float = 0.03     # 0.03% min spread
-
-    STABLECOIN_SEARCH_QUERIES: list = [
-        'USDC/WETH', 'USDbC/WETH', 'USDT/WETH', 'USDC/USDbC',
-        'cbETH/WETH', 'AERO/WETH', 'WBTC/WETH', 'DAI/USDC',
-        'BALD/WETH', 'BRETT/WETH',
-    ]
 
     def __init__(self, testnet: bool = False):
         super().__init__(testnet)
