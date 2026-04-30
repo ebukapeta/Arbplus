@@ -133,15 +133,39 @@ class ArbitrumScanner(DexScreenerScanner):
     NATIVE_PRICE_USD = 3500.0
 
     # Per-chain scanning params — ARB gas ~$0.12, very cheap
-    LOAN_CAP_RATIO:    float = 0.006    # 0.6% of pool liquidity
-    MIN_LIQUIDITY_USD: float = 15_000
-    MIN_SPREAD_PCT:    float = 0.04     # 0.04% min spread
-
+    LOAN_CAP_RATIO:    float = 0.01
+    MIN_LIQUIDITY_USD: float = 10_000
+    MIN_SPREAD_PCT:    float = 0.01
     STABLECOIN_SEARCH_QUERIES: list = [
         'USDC/WETH', 'USDT/WETH', 'USDC/USDT', 'ARB/WETH',
         'WBTC/WETH', 'WBTC/USDC', 'GMX/WETH', 'FRAX/USDC',
         'MAGIC/WETH', 'RDNT/WETH',
     ]
+
+    DEX_FEE_BPS: dict = {
+        'Uniswap V3 Arb':      5,
+        'SushiSwap Arb':       30,
+        'SushiSwap V3 Arb':    5,
+        'Camelot V2':          30,
+        'Camelot V3':           5,
+        'Trader Joe V2.1':     15,
+        'Trader Joe V2.2':     15,
+        'Trader Joe Arb':      30,
+        'Ramses':              20,
+        'Ramses V2':            5,
+        'Zyberswap':           25,
+        'Zyberswap V3':         5,
+        'PancakeSwap V3 Arb':   5,
+        'PancakeSwap V2 Arb':  25,
+        'Balancer V2 Arb':     30,
+        'Chronos':             20,
+        'WOOFi Arb':            0,
+        'Kyberswap Arb':        5,
+        'Curve Arb':            4,
+        'DODO Arb':             0,
+        'Uniswap V2 Arb':      30,
+        'Sterling Finance':    20,
+    }
 
     def __init__(self, testnet: bool = False):
         super().__init__(testnet)

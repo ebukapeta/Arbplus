@@ -120,15 +120,39 @@ class BaseScanner(DexScreenerScanner):
     NATIVE_PRICE_USD = 3500.0
 
     # Per-chain scanning params — Base gas ~$0.005, extremely cheap
-    LOAN_CAP_RATIO:    float = 0.008    # 0.8% of pool liquidity
+    LOAN_CAP_RATIO:    float = 0.01
     MIN_LIQUIDITY_USD: float = 10_000
-    MIN_SPREAD_PCT:    float = 0.03     # 0.03% min spread
-
+    MIN_SPREAD_PCT:    float = 0.01
     STABLECOIN_SEARCH_QUERIES: list = [
         'USDC/WETH', 'USDbC/WETH', 'USDT/WETH', 'USDC/USDbC',
         'cbETH/WETH', 'AERO/WETH', 'WBTC/WETH', 'DAI/USDC',
         'BALD/WETH', 'BRETT/WETH',
     ]
+
+    DEX_FEE_BPS: dict = {
+        'Uniswap V3 Base':     5,
+        'Aerodrome':            5,
+        'Aerodrome V2':        30,
+        'Aerodrome Slipstream': 5,
+        'BaseSwap':            30,
+        'BaseSwap V2':         30,
+        'SushiSwap V3 Base':   5,
+        'PancakeSwap V3 Base': 5,
+        'PancakeSwap V2 Base': 25,
+        'AlienBase':           30,
+        'SwapBased':           30,
+        'Curve Base':           4,
+        'Balancer V2 Base':    30,
+        'Maverick V2':         30,
+        'Velodrome Slipstream': 5,
+        'Velodrome V2':        30,
+        'DackieSwap':          30,
+        'Kim Exchange':         5,
+        'Thick':                5,
+        'Synapse Base':         4,
+        'SynthSwap':           30,
+        'Horizon DEX':         30,
+    }
 
     def __init__(self, testnet: bool = False):
         super().__init__(testnet)

@@ -167,6 +167,36 @@ class BSCScanner(DexScreenerScanner):
     GAS_GWEI_TESTNET  = 10.0
     NATIVE_PRICE_USD  = 600.0
 
+    # Per-chain scanning params
+    LOAN_CAP_RATIO:    float = 0.01
+    MIN_LIQUIDITY_USD: float = 10_000
+    MIN_SPREAD_PCT:    float = 0.01
+
+    STABLECOIN_SEARCH_QUERIES: list = [
+        'USDT/WBNB', 'USDC/WBNB', 'BUSD/WBNB', 'USDT/USDC',
+        'BTCB/WBNB', 'ETH/WBNB', 'CAKE/WBNB', 'USDT/BUSD',
+    ]
+
+    DEX_FEE_BPS: dict = {
+        'PancakeSwap V2':      25,
+        'PancakeSwap V3':       5,
+        'BiSwap':              10,
+        'Squadswap':           25,
+        'MDEX':                30,
+        'BabySwap':            30,
+        'Nomiswap':            25,
+        'AutoShark':           25,
+        'UniChain BSC':        30,
+        'Swych':               25,
+        'SushiSwap V3 BSC':    5,
+        'Uniswap V3 BSC':      5,
+        'WaultSwap':           20,
+        'Ellipsis':             4,
+        'DODO':                 0,
+        'DODO BSC':             0,
+        'Ant Exchange':        25,
+    }
+
     def __init__(self, testnet: bool = False):
         super().__init__(testnet)
         self.w3: Optional[Web3] = None

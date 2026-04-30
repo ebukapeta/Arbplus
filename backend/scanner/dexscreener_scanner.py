@@ -118,6 +118,10 @@ def normalize_dex(raw_dex_id: str, alias_map: dict) -> str:
 
 # ── Core opportunity derivation ───────────────────────────────────────────────
 
+# Default per-swap fee (bps) used when a DEX has no entry in the chain's DEX_FEE_BPS map.
+DEFAULT_DEX_FEE_BPS = 30   # 0.30% — conservative fallback (V2 standard)
+
+
 def derive_opportunities(
     pairs: list,
     main_tokens: set,
@@ -132,9 +136,10 @@ def derive_opportunities(
     loan_cap_ratio: float = 0.0025,
     min_loan_usd: float = 200.0,
     price_impact_mult: float = 1.5,
-    # DEX swap fee: 0.3% buy + 0.3% sell = 0.6% of trade size
-    # This scales proportionally with loan size (unlike fixed gas_usd)
-    dex_fee_pct: float = 0.60,
+    # Per-DEX fee map: display_name (from DEX_ALIASES) → fee_bps per ONE swap.
+    # Round-trip cost = buy_fee_bps + sell_fee_bps.
+    # If a DEX is not in this map, DEFAULT_DEX_FEE_BPS (30bps) is used.
+    dex_fee_map: dict = {},
     min_spread_pct: float = 0.05,
 ) -> tuple:
     """
@@ -144,8 +149,9 @@ def derive_opportunities(
     ─────────────────────────────
     gas_usd       Fixed blockchain tx cost. Same whether loan is $200 or $200k.
                   Differs per chain (BSC ~$0.32, ETH ~$28, ARB ~$0.12, Base ~$0.05).
-    dex_fee_usd   loan_usd × 0.60%  →  scales with trade size.
-                  (0.3% on buy DEX + 0.3% on sell DEX — standard V2/V3 fee tier)
+    dex_fee_usd   loan × (buy_fee_bps + sell_fee_bps) / 10000
+                  Uses per-DEX fee from dex_fee_map. PCS V2=25bps, BiSwap=10bps,
+                  PCS V3=5bps. Falls back to DEFAULT_DEX_FEE_BPS=30bps if unknown.
     flash_fee_usd loan_usd × provider_bps/100  →  scales with trade size.
                   (DODO 0%, PancakeV3 0.01%, Aave 0.05%, Balancer 0%)
 
@@ -298,9 +304,15 @@ def derive_opportunities(
         #   dex_fee_usd   : DEX swap fees (volume-proportional)
         #   flash_fee_usd : flash loan provider fee (volume-proportional)
         #   gas_usd       : fixed tx cost regardless of loan size
-        dex_fee_usd       = loan_usd * (dex_fee_pct   / 100)
-        flash_fee_usd     = loan_usd * (flash_fee_pct / 100)
-        total_fee_usd     = dex_fee_usd + flash_fee_usd
+        # Per-DEX fee lookup: each swap costs fee_bps/10000 of trade size.
+        # Round trip = buy swap + sell swap (two separate swaps).
+        buy_fee_bps  = dex_fee_map.get(buy['dex'],  DEFAULT_DEX_FEE_BPS)
+        sell_fee_bps = dex_fee_map.get(sell['dex'], DEFAULT_DEX_FEE_BPS)
+        rt_fee_bps   = buy_fee_bps + sell_fee_bps   # round-trip bps
+
+        dex_fee_usd   = loan_usd * rt_fee_bps / 10_000
+        flash_fee_usd = loan_usd * (flash_fee_pct / 100)
+        total_fee_usd = dex_fee_usd + flash_fee_usd
 
         gross_profit_usd  = loan_usd * (spread_pct / 100)
         net_profit_usd    = gross_profit_usd - total_fee_usd - gas_usd
@@ -314,6 +326,8 @@ def derive_opportunities(
                 'spread': round(spread_pct, 4),
                 'gross_usd': round(gross_profit_usd, 3),
                 'fee_usd': round(total_fee_usd, 3),
+                'buy_fee_bps': buy_fee_bps,
+                'sell_fee_bps': sell_fee_bps,
                 'gas_usd': round(gas_usd, 3),
                 'net_usd': round(net_profit_usd, 3),
             })
@@ -556,8 +570,9 @@ class DexScreenerScanner:
         loan_cap_ratio = float(config.get('loanCapRatio',    self.LOAN_CAP_RATIO))
         min_liq_usd    = float(config.get('minLiquidityUsd', self.MIN_LIQUIDITY_USD))
         min_spread_pct = float(config.get('minSpreadPct',    self.MIN_SPREAD_PCT))
-        # min gas-coverage net profit: scale with gas so we don't set ETH the same as Base
-        min_net_profit = max(0.10, gas_usd * 0.15)
+        # min gas-coverage net profit: must exceed gas (no point executing at a loss)
+        # Using 1.5× gas as floor gives a small safety margin above gas cost.
+        min_net_profit = max(0.05, gas_usd * 1.5)
 
         opps, stats = derive_opportunities(
             pairs            = all_pairs,
@@ -568,10 +583,12 @@ class DexScreenerScanner:
             price_fallbacks  = self.PRICE_FALLBACKS,
             flash_fee_pct    = flash_fee_pct,
             gas_usd          = gas_usd,
+            dex_fee_map      = getattr(self, 'DEX_FEE_BPS', {}),
             min_net_profit_usd = min_net_profit,
             min_liquidity_usd  = min_liq_usd,
             loan_cap_ratio     = loan_cap_ratio,
             min_spread_pct     = min_spread_pct,
+            min_loan_usd       = float(config.get('minLoanUsd', 50.0)),
         )
 
         for opp in opps:

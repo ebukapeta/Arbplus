@@ -107,17 +107,34 @@ class ETHScanner(DexScreenerScanner):
     NATIVE_PRICE_USD = 3500.0
 
     # Per-chain scanning params — ETH gas ~$28 so needs bigger loans & pools
-    LOAN_CAP_RATIO:    float = 0.008    # 0.8% of pool liquidity
-    MIN_LIQUIDITY_USD: float = 50_000   # only high-liq pools worth the gas
-    MIN_SPREAD_PCT:    float = 0.08     # 0.08% min spread on ETH
-
-    # High-volume ETH stablecoin pairs (Uniswap V3, Curve) DexScreener often
-    # returns only when searched directly by pair name
+    LOAN_CAP_RATIO:    float = 0.01     # ETH gas ~$28 needs larger loans
+    MIN_LIQUIDITY_USD: float = 10_000
+    MIN_SPREAD_PCT:    float = 0.01
     STABLECOIN_SEARCH_QUERIES: list = [
         'USDC/WETH', 'USDT/WETH', 'USDC/USDT', 'DAI/USDC',
         'WBTC/WETH', 'WBTC/USDC', 'FRAX/USDC', 'LUSD/USDC',
         'stETH/WETH', 'rETH/WETH',
     ]
+
+    DEX_FEE_BPS: dict = {
+        'Uniswap V3':          5,
+        'Uniswap V2':          30,
+        'SushiSwap':           30,
+        'SushiSwap V3':        5,
+        'PancakeSwap V3':      5,
+        'PancakeSwap V2':      25,
+        'Curve':                4,
+        'Balancer V2':         30,
+        'Maverick':            30,
+        'Kyberswap Classic':   30,
+        'Kyberswap Elastic':    5,
+        'DODO':                 0,
+        'Fraxswap':            30,
+        'DeFi Swap':           30,
+        'Elk Finance':         30,
+        'Verse DEX':           30,
+        'ShibaSwap':           30,
+    }
 
     def __init__(self, testnet: bool = False):
         super().__init__(testnet)
