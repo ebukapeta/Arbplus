@@ -546,7 +546,7 @@ class DexScreenerScanner:
             f"[{self.NETWORK_NAME} {label}] Scan start\n"
             f"  Base tokens : {base_tokens}\n"
             f"  Gas est.    : ${gas_usd:.4f} (fixed tx cost)\n"
-            f"  DEX fee     : 0.60% of trade size (0.3% buy + 0.3% sell)\n"
+            f"  DEX fee     : per-DEX (buy+sell bps from DEX_FEE_BPS map; fallback=30bps)\n"
             f"{'='*60}"
         )
 
@@ -608,11 +608,16 @@ class DexScreenerScanner:
 
         profitable = [o for o in opps
                       if o['netProfitUsd'] > 0
-                      and o['netProfitPct'] >= min_net_pct
-                      and o.get('executionStatus') != 'rejected']
-        # Filter out rejected opps before sending to frontend and computing stats
-        visible_opps = [o for o in opps if o.get('executionStatus') != 'rejected']
-        rejected_count = len(opps) - len(visible_opps)
+                      and o['netProfitPct'] >= min_net_pct]
+        # Include ALL opps — rejected ones are tagged with executionStatus='rejected'
+        # so the UI/executor can decide whether to attempt them.
+        # Sort: profitable first, then candidates, then rejected (by net profit desc).
+        def _sort_key(o):
+            status = o.get('executionStatus', 'candidate')
+            rank = 0 if status == 'execution_ready' else (1 if status == 'candidate' else 2)
+            return (rank, -o['netProfitUsd'])
+        visible_opps   = sorted(opps, key=_sort_key)
+        rejected_count = sum(1 for o in opps if o.get('executionStatus') == 'rejected')
 
         avg_spread = round(sum(o['spread'] for o in visible_opps) / len(visible_opps), 4) if visible_opps else 0
         best_profit = visible_opps[0]['netProfitUsd'] if visible_opps else 0
@@ -711,10 +716,14 @@ class DexScreenerScanner:
                     opp.get('quoteTokenAddress', ''),
                 )
                 if not reserves['valid']:
-                    _execution_engine.mark_rejected(opp, reserves['reason'])
-                    logger.info(f"  REJECTED {opp['pair']}: {reserves['reason']}")
+                    # Reserve fetch failed — could be RPC timeout, non-standard pool,
+                    # or missing pool address. Don't reject: mark as candidate so it
+                    # still shows and can be manually reviewed / attempted.
+                    opp['executionStatus'] = 'candidate'
+                    opp['reserveStatus']   = reserves['reason']
+                    logger.info(f"  RESERVE MISS {opp['pair']}: {reserves['reason']} — kept as candidate")
                     verified_count += 1
-                    continue
+                    # Don't continue — still run router check if routers available
 
             # Step 3: Router validation (requires both routers known)
             # Use _resolve_router if available (chain subclasses), else routers.get()
