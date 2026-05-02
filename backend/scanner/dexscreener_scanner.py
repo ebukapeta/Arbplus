@@ -221,9 +221,11 @@ def derive_opportunities(
         loan_asset  = base_sym  if base_is_main  else quote_sym
         quote_asset = quote_sym if base_is_main  else base_sym
 
-        if quote_asset not in stable_symbols and quote_asset not in main_tokens:
-            skipped_nomatch += 1
-            continue
+        # Quote asset can be anything — stablecoin, another base token, or any
+        # other token paired with our base token (e.g. WBNB/SAFEMOON).
+        # The address authenticity check below prevents fake/spoofed base tokens.
+        # We DO still require the loan asset (the base token side) to match our
+        # known address, so we're always trading a verified token.
 
         loan_addr  = (pair.get('baseToken',  {}).get('address') or '').lower() if base_is_main  else (pair.get('quoteToken', {}).get('address') or '').lower()
         quote_addr = (pair.get('quoteToken', {}).get('address') or '').lower() if base_is_main  else (pair.get('baseToken',  {}).get('address') or '').lower()
@@ -254,6 +256,9 @@ def derive_opportunities(
             'quote_addr':  quote_addr,
             'pool_addr':   pair.get('pairAddress', ''),
             'chain_id':    pair.get('chainId', ''),
+            # Raw token data for execution (needed by router for non-standard pairs)
+            'base_token_data':  pair.get('baseToken',  {}),
+            'quote_token_data': pair.get('quoteToken', {}),
         })
 
     logger.info(f"  Pair buckets: {len(buckets)} | skipped liq={skipped_liq} nomatch={skipped_nomatch}")

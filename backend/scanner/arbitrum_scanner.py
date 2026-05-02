@@ -216,8 +216,17 @@ class ArbitrumScanner(DexScreenerScanner):
             base_addr  = Web3.to_checksum_address(opportunity['baseTokenAddress'].lower())
             quote_addr = Web3.to_checksum_address(opportunity['quoteTokenAddress'].lower())
             flash_amt  = int(opportunity['flashLoanAmount'] * 1e18)
-            min_profit = int(opportunity.get('netProfit', 0) * 0.9 * 1e18)
-            deadline   = int(time.time()) + 1200
+            # Convert USD net profit to token-native units for the on-chain minProfit guard.
+            # netProfit is in USD; the contract compares in token units (wei).
+            # We use 85% of expected profit as the floor (15% slippage buffer).
+            net_profit_usd  = float(opportunity.get('netProfit', 0) or 0)
+            loan_asset_sym  = (opportunity.get('baseToken') or opportunity.get('flashLoanAsset') or '').upper()
+            token_price_usd = float((self.PRICE_FALLBACKS or {}).get(loan_asset_sym, 0) or 0)
+            if token_price_usd > 0 and net_profit_usd > 0:
+                min_profit = int((net_profit_usd / token_price_usd) * 0.85 * 1e18)
+            else:
+                min_profit = 0  # no price info — let on-chain profit check handle it
+            deadline   = int(time.time()) + 90    # 90s — stale arb opps revert cleanly
             provider_id= 1 if 'Balancer' in opportunity.get('flashLoanProvider', '') else 0
             buy_router  = self._resolve_router(opportunity['buyDex'])
             sell_router = self._resolve_router(opportunity['sellDex'])

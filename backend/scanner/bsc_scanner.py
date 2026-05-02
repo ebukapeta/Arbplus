@@ -11,7 +11,7 @@ from .dexscreener_scanner import DexScreenerScanner
 
 logger = logging.getLogger(__name__)
 
-FLASH_ARB_ABI = json.loads('[{"inputs":[{"internalType":"address","name":"_flashLoanAsset","type":"address"},{"internalType":"uint256","name":"_flashLoanAmount","type":"uint256"},{"internalType":"address","name":"_buyDex","type":"address"},{"internalType":"address","name":"_sellDex","type":"address"},{"internalType":"address[]","name":"_buyPath","type":"address[]"},{"internalType":"address[]","name":"_sellPath","type":"address[]"},{"internalType":"uint256","name":"_minProfit","type":"uint256"},{"internalType":"uint256","name":"_deadline","type":"uint256"}],"name":"executeArbitrage","outputs":[],"stateMutability":"nonpayable","type":"function"}]')
+FLASH_ARB_ABI = json.loads('[{"inputs":[{"internalType":"address","name":"_flashLoanAsset","type":"address"},{"internalType":"uint256","name":"_flashLoanAmount","type":"uint256"},{"internalType":"address","name":"_buyDex","type":"address"},{"internalType":"address","name":"_sellDex","type":"address"},{"internalType":"address[]","name":"_buyPath","type":"address[]"},{"internalType":"address[]","name":"_sellPath","type":"address[]"},{"internalType":"uint256","name":"_minProfit","type":"uint256"},{"internalType":"uint256","name":"_deadline","type":"uint256"},{"internalType":"uint8","name":"_provider","type":"uint8"}],"name":"executeArbitrage","outputs":[],"stateMutability":"nonpayable","type":"function"}]')
 
 BSC_MAINNET_RPC = [
     'https://rpc.ankr.com/bsc',
@@ -259,8 +259,17 @@ class BSCScanner(DexScreenerScanner):
             base_addr  = Web3.to_checksum_address(opportunity['baseTokenAddress'].lower())
             quote_addr = Web3.to_checksum_address(opportunity['quoteTokenAddress'].lower())
             flash_amt  = int(opportunity['flashLoanAmount'] * 1e18)
-            min_profit = int(opportunity.get('netProfit', 0) * 0.9 * 1e18)
-            deadline   = int(time.time()) + 1200  # 20 min — allow time for block inclusion
+            # Convert USD net profit to token-native units for the on-chain minProfit guard.
+            # netProfit is in USD; the contract compares in token units (wei).
+            # We use 85% of expected profit as the floor (15% slippage buffer).
+            net_profit_usd  = float(opportunity.get('netProfit', 0) or 0)
+            loan_asset_sym  = (opportunity.get('baseToken') or opportunity.get('flashLoanAsset') or '').upper()
+            token_price_usd = float((self.PRICE_FALLBACKS or {}).get(loan_asset_sym, 0) or 0)
+            if token_price_usd > 0 and net_profit_usd > 0:
+                min_profit = int((net_profit_usd / token_price_usd) * 0.85 * 1e18)
+            else:
+                min_profit = 0  # no price info — let on-chain profit check handle it
+            deadline   = int(time.time()) + 90    # 90s — stale arb opps revert cleanly
 
             # Get router addresses — try exact match first, then case-insensitive partial
             buy_router_raw  = self._resolve_router(opportunity['buyDex'])
@@ -268,13 +277,25 @@ class BSCScanner(DexScreenerScanner):
             if not buy_router_raw or not sell_router_raw:
                 return {'status': 'error', 'error': f"Router not found for {opportunity['buyDex']} or {opportunity['sellDex']}. Add it to BSC DEX_ROUTERS_MAINNET."}
 
+            # Select flash loan provider:
+            # 0=DODO (0% fee, but only works for tokens in that specific pool)
+            # 1=PancakeSwap V3 (0.01% fee, works for most BSC tokens)
+            # 2=Aave V3 BSC (0.05% fee, broadest asset coverage — safest fallback)
+            flash_provider = opportunity.get('flashLoanProvider', '')
+            if 'DODO' in flash_provider:
+                provider_id = 0
+            elif 'Pancake' in flash_provider and 'V3' in flash_provider:
+                provider_id = 1
+            else:
+                provider_id = 2  # Aave V3 BSC — widest asset support
+
             tx = contract.functions.executeArbitrage(
                 base_addr, flash_amt,
                 Web3.to_checksum_address(buy_router_raw.lower()),
                 Web3.to_checksum_address(sell_router_raw.lower()),
                 [base_addr, quote_addr],
                 [quote_addr, base_addr],
-                min_profit, deadline,
+                min_profit, deadline, provider_id,
             ).build_transaction({
                 'from':     Web3.to_checksum_address(wallet_address.lower()),
                 'gas':      600_000,
