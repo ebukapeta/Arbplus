@@ -709,9 +709,12 @@ class DexScreenerScanner:
                 opp, self._flash_providers
             )
             if not size_ok:
-                _execution_engine.mark_rejected(opp, size_reason)
-                logger.info(f"  REJECTED {opp['pair']}: {size_reason}")
-                continue
+                # Size check failed — warn but still allow manual execution attempt.
+                # User may have a different provider or pool not in our caps table.
+                opp['executionStatus'] = 'size_warn'
+                opp['rejectionReason'] = size_reason
+                logger.info(f"  SIZE WARN {opp['pair']}: {size_reason}")
+                # Don't skip — continue to reserve + router checks
 
             # Step 2: Reserve freshness (requires pool address)
             if pool_addr and len(pool_addr) > 10:
@@ -721,12 +724,12 @@ class DexScreenerScanner:
                     opp.get('quoteTokenAddress', ''),
                 )
                 if not reserves['valid']:
-                    # Reserve fetch failed — could be RPC timeout, non-standard pool,
-                    # or missing pool address. Don't reject: mark as candidate so it
-                    # still shows and can be manually reviewed / attempted.
-                    opp['executionStatus'] = 'candidate'
+                    # Reserve fetch failed — RPC timeout, non-standard pool, or missing
+                    # pool address. Tag as 'no_reserve' (displays as CGR in UI) so the
+                    # user can still attempt execution manually.
+                    opp['executionStatus'] = 'no_reserve'
                     opp['reserveStatus']   = reserves['reason']
-                    logger.info(f"  RESERVE MISS {opp['pair']}: {reserves['reason']} — kept as candidate")
+                    logger.info(f"  CGR {opp['pair']}: {reserves['reason']}")
                     verified_count += 1
                     # Don't continue — still run router check if routers available
 

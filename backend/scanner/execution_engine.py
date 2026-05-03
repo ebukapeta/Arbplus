@@ -82,9 +82,9 @@ def verify_flashloan_size_limits(
     if loan_usd > cap:
         return False, f'loan ${loan_usd:,.0f} exceeds {provider_name} cap of ${cap:,.0f}'
 
-    # Minimum loan size check
-    if loan_usd < 100:
-        return False, f'loan ${loan_usd:.2f} is below $100 minimum'
+    # Minimum loan size check — must match min_loan_usd config (set to $50)
+    if loan_usd < 50:
+        return False, f'loan ${loan_usd:.2f} is below $50 minimum'
 
     return True, 'flash loan size ok'
 
