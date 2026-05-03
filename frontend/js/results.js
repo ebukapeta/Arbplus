@@ -375,8 +375,8 @@ const ResultsManager = (() => {
         throw metaMaskErr;
       }
 
-      const cfg          = activeCfg();
-      const explorerBase = cfg.blockExplorerTx || 'https://bscscan.com/tx/';
+      const cfg2         = activeCfg();
+      const explorerBase = cfg2.blockExplorerTx || 'https://bscscan.com/tx/';
       AppLog.info(`Tx broadcast: ${shortTxHash(txHash)} — waiting for on-chain confirmation…`);
 
       // Show "mining" state while we wait — none of the swap steps are done yet
