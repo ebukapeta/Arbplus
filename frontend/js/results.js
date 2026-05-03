@@ -83,6 +83,8 @@ const ResultsManager = (() => {
     const isVerified    = execStatus === 'verified';
     const isMarginal    = execStatus === 'marginal';
     const isRejected    = execStatus === 'rejected';
+    const isNoReserve   = execStatus === 'no_reserve';
+    const isSizeWarn    = execStatus === 'size_warn';
 
     const spreadClass   = opp.spread > 2 ? 'good' : '';
     const baseColor     = getTokenColor(opp.baseToken  || '');
@@ -96,7 +98,7 @@ const ResultsManager = (() => {
     const feeW      = Math.min(100 - netW, (totalCost / gross) * 100);
     const gasW      = Math.max(0, 100 - netW - feeW);
 
-    const canExecute = (isProfitable || isVerified || isCandidate || isMarginal)
+    const canExecute = (isProfitable || isVerified || isCandidate || isMarginal || isNoReserve || isSizeWarn)
                        && WalletManager.isConnected() && !isRejected;
 
     // Provider label — auto-selected by backend
@@ -122,6 +124,8 @@ const ResultsManager = (() => {
       : isVerified    ? '⚡ Verified'
       : isCandidate   ? '◎ Candidate'
       : isMarginal    ? '~ Marginal'
+      : isNoReserve   ? '◌ CGR'
+      : isSizeWarn    ? '⚠ Size Warn'
       : isRejected    ? '✗ Rejected'
       : '✗ Loss'}
     </div>
@@ -316,8 +320,42 @@ const ResultsManager = (() => {
     let   txHash = '';
 
     try {
-      // ── Step 1: Build unsigned tx ──────────────────────────────────────
+      // ── Step 0: Ensure wallet is on the correct chain ──────────────────
+      // The user may have their wallet on a different chain (e.g. Arbitrum)
+      // while executing a BSC opportunity. We must switch before signing.
       renderSteps(0, done);
+      const cfg = activeCfg();
+      if (cfg.chainIdHex && window.ethereum) {
+        try {
+          const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+          if (currentChainId.toLowerCase() !== cfg.chainIdHex.toLowerCase()) {
+            try {
+              await window.ethereum.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: cfg.chainIdHex }],
+              });
+              AppLog.info(`Switched wallet to ${cfg.name} (${cfg.chainIdHex})`);
+            } catch (switchErr) {
+              if (switchErr.code === 4902) {
+                await window.ethereum.request({
+                  method: 'wallet_addEthereumChain',
+                  params: [{ chainId: cfg.chainIdHex, chainName: cfg.name,
+                    nativeCurrency: cfg.nativeCurrency, rpcUrls: cfg.rpcUrls,
+                    blockExplorerUrls: cfg.blockExplorerUrls }],
+                });
+              } else {
+                throw new Error(`Chain switch failed: ${switchErr.message}. Please switch to ${cfg.name} manually.`);
+              }
+            }
+          }
+        } catch (chainErr) {
+          if (chainErr.message.includes('Chain switch failed')) throw chainErr;
+          // eth_chainId failed — non-fatal, proceed and let MetaMask catch it
+          AppLog.warn('Could not verify wallet chain — proceeding anyway.');
+        }
+      }
+
+      // ── Step 1: Build unsigned tx ──────────────────────────────────────
       const execData = await ScannerAPI.executeTrade(opp);
       done.add(0);
       if (execData.status === 'error') throw new Error(execData.error);
