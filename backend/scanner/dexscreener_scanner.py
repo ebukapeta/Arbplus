@@ -118,6 +118,51 @@ def normalize_dex(raw_dex_id: str, alias_map: dict) -> str:
 
 # ── Core opportunity derivation ───────────────────────────────────────────────
 
+# Token decimal lookup — used to convert token amounts to correct on-chain units.
+# Default is 18 (ERC-20 standard). Non-18 tokens MUST be listed here or the
+# flash loan amount will be off by orders of magnitude.
+TOKEN_DECIMALS: dict = {
+    'USDC':   6, 'USDbC': 6, 'USDC.e': 6,
+    'USDT':   6,
+    'WBTC':   8,
+    # Everything else defaults to 18
+}
+
+def token_decimals(symbol: str) -> int:
+    """Return the on-chain decimal count for a token symbol."""
+    return TOKEN_DECIMALS.get(symbol.upper(), 18)
+
+
+# DEX type: 0 = V2 (swapExactTokensForTokens), 1 = V3 (exactInputSingle)
+DEX_TYPE: dict = {
+    'PancakeSwap V3':        1, 'PancakeSwap V3 ETH':    1,
+    'PancakeSwap V3 Arb':    1, 'PancakeSwap V3 Base':   1,
+    'SushiSwap V3 BSC':      1, 'SushiSwap V3':          1,
+    'SushiSwap V3 Arb':      1, 'SushiSwap V3 Base':     1,
+    'Uniswap V3 BSC':        1, 'Uniswap V3':            1,
+    'Uniswap V3 Arb':        1, 'Uniswap V3 Base':       1,
+    'Camelot V3':            1, 'Kyberswap Arb':         1,
+    'Kyberswap Elastic':     1, 'Ramses V2':             1,
+    'Zyberswap V3':          1, 'Thena':                 1,
+    'Aerodrome Slipstream':  1, 'Velodrome Slipstream':  1,
+    'Kim Exchange':          1, 'Thick':                 1,
+}
+
+# V3 fee tiers in basis points (e.g. 500 = 0.05%)
+DEX_FEE_TIER: dict = {
+    'PancakeSwap V3':       100, 'PancakeSwap V3 ETH':   100,
+    'PancakeSwap V3 Arb':   100, 'PancakeSwap V3 Base':  100,
+    'SushiSwap V3 BSC':     500, 'SushiSwap V3':         500,
+    'SushiSwap V3 Arb':     500, 'SushiSwap V3 Base':    500,
+    'Uniswap V3 BSC':       500, 'Uniswap V3':           500,
+    'Uniswap V3 Arb':       500, 'Uniswap V3 Base':      500,
+    'Camelot V3':          3000, 'Kyberswap Arb':         40,
+    'Kyberswap Elastic':     40, 'Ramses V2':            200,
+    'Zyberswap V3':         500, 'Thena':                100,
+    'Aerodrome Slipstream': 100, 'Velodrome Slipstream': 200,
+    'Kim Exchange':         200, 'Thick':                200,
+}
+
 # Default per-swap fee (bps) used when a DEX has no entry in the chain's DEX_FEE_BPS map.
 DEFAULT_DEX_FEE_BPS = 30   # 0.30% — conservative fallback (V2 standard)
 

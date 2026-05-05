@@ -170,14 +170,17 @@ def verify_router_execution(
         w3, buy_router, base_token, quote_token, loan_amount_usd, base_price_usd
     )
     if not buy_ok:
-        return {'valid': False, 'status': 'rejected', 'reason': buy_reason, 'confirmed_spread': 0.0}
+        # getAmountsOut reverted — likely non-V2 interface (Curve, Balancer, DODO).
+        # This is NOT proof the opportunity is dead — return candidate so user can attempt.
+        return {'valid': False, 'status': 'candidate', 'reason': f'buy route unverifiable ({buy_reason}) — non-V2 DEX, marked candidate', 'confirmed_spread': 0.0}
 
     # Gate 3: sell route
     sell_ok, sell_reason, base_out = validate_sell_route(
         w3, sell_router, quote_token, base_token, quote_out
     )
     if not sell_ok:
-        return {'valid': False, 'status': 'rejected', 'reason': sell_reason, 'confirmed_spread': 0.0}
+        # Same as buy — revert on non-V2 DEX interface → candidate
+        return {'valid': False, 'status': 'candidate', 'reason': f'sell route unverifiable ({sell_reason}) — non-V2 DEX, marked candidate', 'confirmed_spread': 0.0}
 
     # Gate 4: compute confirmed spread
     # test_amount_in is 10% of loan in token units

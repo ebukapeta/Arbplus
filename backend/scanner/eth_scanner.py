@@ -9,7 +9,7 @@ from .dexscreener_scanner import DexScreenerScanner
 
 logger = logging.getLogger(__name__)
 
-FLASH_ARB_ABI = json.loads('[{"inputs":[{"internalType":"address","name":"_flashLoanAsset","type":"address"},{"internalType":"uint256","name":"_flashLoanAmount","type":"uint256"},{"internalType":"address","name":"_buyDex","type":"address"},{"internalType":"address","name":"_sellDex","type":"address"},{"internalType":"address[]","name":"_buyPath","type":"address[]"},{"internalType":"address[]","name":"_sellPath","type":"address[]"},{"internalType":"uint256","name":"_minProfit","type":"uint256"},{"internalType":"uint256","name":"_deadline","type":"uint256"},{"internalType":"uint8","name":"_provider","type":"uint8"}],"name":"executeArbitrage","outputs":[],"stateMutability":"nonpayable","type":"function"}]')
+FLASH_ARB_ABI = json.loads('[{"inputs": [{"internalType": "address", "name": "_flashLoanAsset", "type": "address"}, {"internalType": "uint256", "name": "_flashLoanAmount", "type": "uint256"}, {"internalType": "address", "name": "_buyDex", "type": "address"}, {"internalType": "address", "name": "_sellDex", "type": "address"}, {"internalType": "address[]", "name": "_buyPath", "type": "address[]"}, {"internalType": "address[]", "name": "_sellPath", "type": "address[]"}, {"internalType": "uint256", "name": "_minProfit", "type": "uint256"}, {"internalType": "uint256", "name": "_deadline", "type": "uint256"}, {"internalType": "uint8", "name": "_provider", "type": "uint8"}, {"internalType": "uint8", "name": "_buyDexType", "type": "uint8"}, {"internalType": "uint8", "name": "_sellDexType", "type": "uint8"}, {"internalType": "uint24", "name": "_buyFeeTier", "type": "uint24"}, {"internalType": "uint24", "name": "_sellFeeTier", "type": "uint24"}], "name": "executeArbitrage", "outputs": [], "stateMutability": "nonpayable", "type": "function"}]')
 
 ETH_MAINNET_RPC = ['https://eth.llamarpc.com','https://rpc.ankr.com/eth','https://ethereum.publicnode.com']
 ETH_TESTNET_RPC = ['https://rpc.sepolia.org','https://ethereum-sepolia.publicnode.com']
@@ -101,7 +101,7 @@ class ETHScanner(DexScreenerScanner):
         {'name':'Uniswap V3 Sep Flash',  'fee_bps':5, 'pool':'0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E', 'assets':['WETH','USDC']},
     ]
 
-    GAS_UNITS        = 400_000
+    GAS_UNITS        = 600_000
     GAS_GWEI_MAINNET = 20.0
     GAS_GWEI_TESTNET = 1.2
     NATIVE_PRICE_USD = 3500.0
@@ -119,20 +119,26 @@ class ETHScanner(DexScreenerScanner):
     DEX_FEE_BPS: dict = {
         'Uniswap V3':          5,
         'Uniswap V2':          30,
+        'SushiSwap ETH':       30,
         'SushiSwap':           30,
         'SushiSwap V3':        5,
+        'PancakeSwap V3 ETH':   5,
         'PancakeSwap V3':      5,
         'PancakeSwap V2':      25,
+        'Curve ETH':            4,
         'Curve':                4,
         'Balancer V2':         30,
         'Maverick':            30,
+        'Kyberswap ETH':       30,
         'Kyberswap Classic':   30,
         'Kyberswap Elastic':    5,
+        'DODO ETH':             0,
         'DODO':                 0,
         'Fraxswap':            30,
         'DeFi Swap':           30,
         'Elk Finance':         30,
         'Verse DEX':           30,
+        'Shibaswap':           30,
         'ShibaSwap':           30,
     }
 
@@ -184,7 +190,9 @@ class ETHScanner(DexScreenerScanner):
             contract   = self.w3.eth.contract(address=Web3.to_checksum_address(contract_address.lower()), abi=FLASH_ARB_ABI)
             base_addr  = Web3.to_checksum_address(opportunity['baseTokenAddress'].lower())
             quote_addr = Web3.to_checksum_address(opportunity['quoteTokenAddress'].lower())
-            flash_amt  = int(opportunity['flashLoanAmount'] * 1e18)
+            loan_sym   = (opportunity.get('baseToken') or opportunity.get('flashLoanAsset') or '').upper()
+            loan_dec   = token_decimals(loan_sym)
+            flash_amt  = int(opportunity['flashLoanAmount'] * (10 ** loan_dec))
             # Convert USD net profit to token-native units for the on-chain minProfit guard.
             # netProfit is in USD; the contract compares in token units (wei).
             # We use 85% of expected profit as the floor (15% slippage buffer).
@@ -192,7 +200,7 @@ class ETHScanner(DexScreenerScanner):
             loan_asset_sym  = (opportunity.get('baseToken') or opportunity.get('flashLoanAsset') or '').upper()
             token_price_usd = float((self.PRICE_FALLBACKS or {}).get(loan_asset_sym, 0) or 0)
             if token_price_usd > 0 and net_profit_usd > 0:
-                min_profit = int((net_profit_usd / token_price_usd) * 0.85 * 1e18)
+                min_profit = int((net_profit_usd / token_price_usd) * 0.85 * (10 ** loan_dec))
             else:
                 min_profit = 0  # no price info — let on-chain profit check handle it
             deadline   = int(time.time()) + 90    # 90s — stale arb opps revert cleanly
@@ -201,17 +209,35 @@ class ETHScanner(DexScreenerScanner):
             sell_router = self._resolve_router(opportunity['sellDex'])
             if not buy_router or not sell_router:
                 return {'status':'error','error':f"Router not found for {opportunity['buyDex']} or {opportunity['sellDex']}"}
-            tx = contract.functions.executeArbitrage(
+            buy_router_cs  = Web3.to_checksum_address(buy_router.lower())
+            sell_router_cs = Web3.to_checksum_address(sell_router.lower())
+            buy_dex_type   = DEX_TYPE.get(opportunity.get('buyDex',  ''), 0)
+            sell_dex_type  = DEX_TYPE.get(opportunity.get('sellDex', ''), 0)
+            buy_fee_tier   = DEX_FEE_TIER.get(opportunity.get('buyDex',  ''), 3000)
+            sell_fee_tier  = DEX_FEE_TIER.get(opportunity.get('sellDex', ''), 3000)
+            sender         = Web3.to_checksum_address(wallet_address.lower())
+            gas_price      = max(self.w3.eth.gas_price, 2_000_000_000)
+
+            call_args = [
                 base_addr, flash_amt,
-                Web3.to_checksum_address(buy_router.lower()),
-                Web3.to_checksum_address(sell_router.lower()),
+                buy_router_cs, sell_router_cs,
                 [base_addr, quote_addr], [quote_addr, base_addr],
                 min_profit, deadline, provider_id,
-            ).build_transaction({
-                'from': Web3.to_checksum_address(wallet_address.lower()),
-                'gas': 500_000, 'gasPrice': max(self.w3.eth.gas_price, 2_000_000_000),  # min 2 gwei
-                'nonce': self.w3.eth.get_transaction_count(Web3.to_checksum_address(wallet_address.lower())),
+                buy_dex_type, sell_dex_type,
+                buy_fee_tier, sell_fee_tier,
+            ]
+            try:
+                estimated = contract.functions.executeArbitrage(*call_args).estimate_gas({'from': sender})
+                gas_limit = int(estimated * 1.25)
+            except Exception as est_err:
+                logger.warning(f"Gas estimate failed: {est_err} — using 600K fallback")
+                gas_limit = 600_000
+
+            tx = contract.functions.executeArbitrage(*call_args).build_transaction({
+                'from': sender, 'gas': gas_limit, 'gasPrice': gas_price,
+                'nonce': self.w3.eth.get_transaction_count(sender),
             })
-            return {'status':'ready','unsignedTx':{'to':tx['to'],'data':tx['data'],'gas':hex(tx['gas']),'gasPrice':hex(tx['gasPrice']),'nonce':hex(tx['nonce']),'value':'0x0','chainId':11155111 if self.testnet else 1}}
+            chain_id = 11155111 if self.testnet else 1
+            return {'status':'ready','unsignedTx':{'to':tx['to'],'data':tx['data'],'gas':hex(tx['gas']),'gasPrice':hex(tx['gasPrice']),'nonce':hex(tx['nonce']),'value':'0x0','chainId':chain_id}}
         except Exception as e:
             return {'status':'error','error':str(e)}

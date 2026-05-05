@@ -11,7 +11,7 @@ from .dexscreener_scanner import DexScreenerScanner
 
 logger = logging.getLogger(__name__)
 
-FLASH_ARB_ABI = json.loads('[{"inputs":[{"internalType":"address","name":"_flashLoanAsset","type":"address"},{"internalType":"uint256","name":"_flashLoanAmount","type":"uint256"},{"internalType":"address","name":"_buyDex","type":"address"},{"internalType":"address","name":"_sellDex","type":"address"},{"internalType":"address[]","name":"_buyPath","type":"address[]"},{"internalType":"address[]","name":"_sellPath","type":"address[]"},{"internalType":"uint256","name":"_minProfit","type":"uint256"},{"internalType":"uint256","name":"_deadline","type":"uint256"},{"internalType":"uint8","name":"_provider","type":"uint8"}],"name":"executeArbitrage","outputs":[],"stateMutability":"nonpayable","type":"function"}]')
+FLASH_ARB_ABI = json.loads('[{"inputs": [{"internalType": "address", "name": "_flashLoanAsset", "type": "address"}, {"internalType": "uint256", "name": "_flashLoanAmount", "type": "uint256"}, {"internalType": "address", "name": "_buyDex", "type": "address"}, {"internalType": "address", "name": "_sellDex", "type": "address"}, {"internalType": "address[]", "name": "_buyPath", "type": "address[]"}, {"internalType": "address[]", "name": "_sellPath", "type": "address[]"}, {"internalType": "uint256", "name": "_minProfit", "type": "uint256"}, {"internalType": "uint256", "name": "_deadline", "type": "uint256"}, {"internalType": "uint8", "name": "_provider", "type": "uint8"}, {"internalType": "uint8", "name": "_buyDexType", "type": "uint8"}, {"internalType": "uint8", "name": "_sellDexType", "type": "uint8"}, {"internalType": "uint24", "name": "_buyFeeTier", "type": "uint24"}, {"internalType": "uint24", "name": "_sellFeeTier", "type": "uint24"}], "name": "executeArbitrage", "outputs": [], "stateMutability": "nonpayable", "type": "function"}]')
 
 BSC_MAINNET_RPC = [
     'https://rpc.ankr.com/bsc',
@@ -162,8 +162,8 @@ class BSCScanner(DexScreenerScanner):
         {'name':'PancakeSwap V2 Testnet Flash','fee_bps':25,'pool':'0xD99D1c33F9fC3444f8101754aBC46c52416550D1','assets':['WBNB','USDT','USDC','BUSD']},
     ]
 
-    GAS_UNITS         = 350_000
-    GAS_GWEI_MAINNET  = 1.5
+    GAS_UNITS         = 600_000
+    GAS_GWEI_MAINNET  = 3.0
     GAS_GWEI_TESTNET  = 10.0
     NATIVE_PRICE_USD  = 600.0
 
@@ -193,6 +193,14 @@ class BSCScanner(DexScreenerScanner):
         'WaultSwap':           20,
         'Ellipsis':             4,
         'DODO':                 0,
+        'SushiSwap':           30,
+        'ApeSwap':             20,
+        'KnightSwap':          25,
+        'Thena':               5,
+        'Trader Joe BSC':      30,
+        'Wombat':              1,
+        'ACryptoS':            5,
+        'PancakeSwap V2 Testnet': 25,
         'DODO BSC':             0,
         'Ant Exchange':        25,
     }
@@ -246,6 +254,36 @@ class BSCScanner(DexScreenerScanner):
                 return addr
         return ''
 
+    NATIVE_INTERMEDIATE = '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c'  # WBNB
+
+    def _resolve_path(self, router_addr: str, from_addr: str, to_addr: str, amount_wei: int) -> list:
+        """
+        Return the best swap path from→to on this router.
+        Tries direct path first, then routes through WBNB if direct fails.
+        Returns [] if no valid path found.
+        """
+        ROUTER_ABI = '[{"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"}],"name":"getAmountsOut","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"view","type":"function"}]'
+        try:
+            router = self.w3.eth.contract(
+                address=Web3.to_checksum_address(router_addr),
+                abi=self.w3.eth.contract(abi=ROUTER_ABI).abi if False else
+                    __import__('json').loads(ROUTER_ABI)
+            )
+        except Exception:
+            return [from_addr, to_addr]  # fallback — can't validate
+
+        for path in [
+            [from_addr, to_addr],
+            [from_addr, self.NATIVE_INTERMEDIATE, to_addr],
+        ]:
+            try:
+                out = router.functions.getAmountsOut(amount_wei, path).call()
+                if out and out[-1] > 0:
+                    return path
+            except Exception:
+                continue
+        return []  # no valid path found
+
     def execute_trade(self, opportunity: dict, wallet_address: str, contract_address: str) -> dict:
         if not self.w3:
             self._connect()
@@ -258,7 +296,9 @@ class BSCScanner(DexScreenerScanner):
             )
             base_addr  = Web3.to_checksum_address(opportunity['baseTokenAddress'].lower())
             quote_addr = Web3.to_checksum_address(opportunity['quoteTokenAddress'].lower())
-            flash_amt  = int(opportunity['flashLoanAmount'] * 1e18)
+            loan_sym   = (opportunity.get('baseToken') or opportunity.get('flashLoanAsset') or '').upper()
+            loan_dec   = token_decimals(loan_sym)
+            flash_amt  = int(opportunity['flashLoanAmount'] * (10 ** loan_dec))
             # Convert USD net profit to token-native units for the on-chain minProfit guard.
             # netProfit is in USD; the contract compares in token units (wei).
             # We use 85% of expected profit as the floor (15% slippage buffer).
@@ -266,7 +306,7 @@ class BSCScanner(DexScreenerScanner):
             loan_asset_sym  = (opportunity.get('baseToken') or opportunity.get('flashLoanAsset') or '').upper()
             token_price_usd = float((self.PRICE_FALLBACKS or {}).get(loan_asset_sym, 0) or 0)
             if token_price_usd > 0 and net_profit_usd > 0:
-                min_profit = int((net_profit_usd / token_price_usd) * 0.85 * 1e18)
+                min_profit = int((net_profit_usd / token_price_usd) * 0.85 * (10 ** loan_dec))
             else:
                 min_profit = 0  # no price info — let on-chain profit check handle it
             deadline   = int(time.time()) + 90    # 90s — stale arb opps revert cleanly
@@ -289,20 +329,55 @@ class BSCScanner(DexScreenerScanner):
             else:
                 provider_id = 2  # Aave V3 BSC — widest asset support
 
-            tx = contract.functions.executeArbitrage(
+            buy_router_cs  = Web3.to_checksum_address(buy_router_raw.lower())
+            sell_router_cs = Web3.to_checksum_address(sell_router_raw.lower())
+
+            # Resolve actual swap paths — validates direct pair exists, falls back to
+            # native-intermediate routing (e.g. TOKEN→WBNB→TOKEN2) if direct fails.
+            buy_path  = self._resolve_path(buy_router_cs,  base_addr, quote_addr, flash_amt)
+            sell_path = self._resolve_path(sell_router_cs, quote_addr, base_addr, flash_amt)
+            if not buy_path:
+                return {'status': 'error', 'error': f'No valid buy path {opportunity["baseToken"]}→{opportunity["quoteToken"]} on {opportunity["buyDex"]}'}
+            if not sell_path:
+                return {'status': 'error', 'error': f'No valid sell path {opportunity["quoteToken"]}→{opportunity["baseToken"]} on {opportunity["sellDex"]}'}
+            logger.info(f'  Paths: buy={[a[:8] for a in buy_path]}, sell={[a[:8] for a in sell_path]}')
+
+            buy_dex_type  = DEX_TYPE.get(opportunity.get('buyDex',  ''), 0)
+            sell_dex_type = DEX_TYPE.get(opportunity.get('sellDex', ''), 0)
+            buy_fee_tier  = DEX_FEE_TIER.get(opportunity.get('buyDex',  ''), 3000)
+            sell_fee_tier = DEX_FEE_TIER.get(opportunity.get('sellDex', ''), 3000)
+            logger.info(f"  DEX types: buy={buy_dex_type}(fee={buy_fee_tier}), sell={sell_dex_type}(fee={sell_fee_tier})")
+
+            call_args = [
                 base_addr, flash_amt,
-                Web3.to_checksum_address(buy_router_raw.lower()),
-                Web3.to_checksum_address(sell_router_raw.lower()),
-                [base_addr, quote_addr],
-                [quote_addr, base_addr],
+                buy_router_cs,
+                sell_router_cs,
+                buy_path,
+                sell_path,
                 min_profit, deadline, provider_id,
-            ).build_transaction({
-                'from':     Web3.to_checksum_address(wallet_address.lower()),
-                'gas':      600_000,
-                'gasPrice': max(self.w3.eth.gas_price, 2_000_000_000),  # min 2 gwei
-                'nonce':    self.w3.eth.get_transaction_count(
-                    Web3.to_checksum_address(wallet_address.lower())
-                ),
+                buy_dex_type, sell_dex_type,
+                buy_fee_tier, sell_fee_tier,
+            ]
+            gas_price  = max(self.w3.eth.gas_price, 2_000_000_000)  # min 2 gwei
+            sender     = Web3.to_checksum_address(wallet_address.lower())
+
+            # Estimate gas dynamically — if this reverts, the trade would fail on-chain.
+            # Catches stale opportunities before MetaMask even shows the confirmation.
+            try:
+                estimated = contract.functions.executeArbitrage(*call_args).estimate_gas({
+                    'from': sender,
+                })
+                gas_limit = int(estimated * 1.25)  # 25% buffer above estimate
+                logger.info(f"  Gas estimate: {estimated:,} units → limit {gas_limit:,}")
+            except Exception as est_err:
+                logger.warning(f"  Gas estimation failed ({est_err}) — using 600K fallback")
+                gas_limit = 600_000
+
+            tx = contract.functions.executeArbitrage(*call_args).build_transaction({
+                'from':     sender,
+                'gas':      gas_limit,
+                'gasPrice': gas_price,
+                'nonce':    self.w3.eth.get_transaction_count(sender),
             })
             chain_id = 97 if self.testnet else 56
             return {
