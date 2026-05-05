@@ -11,7 +11,17 @@ from .dexscreener_scanner import DexScreenerScanner
 
 logger = logging.getLogger(__name__)
 
-FLASH_ARB_ABI = json.loads('[{"inputs": [{"internalType": "address", "name": "_flashLoanAsset", "type": "address"}, {"internalType": "uint256", "name": "_flashLoanAmount", "type": "uint256"}, {"internalType": "address", "name": "_buyDex", "type": "address"}, {"internalType": "address", "name": "_sellDex", "type": "address"}, {"internalType": "address[]", "name": "_buyPath", "type": "address[]"}, {"internalType": "address[]", "name": "_sellPath", "type": "address[]"}, {"internalType": "uint256", "name": "_minProfit", "type": "uint256"}, {"internalType": "uint256", "name": "_deadline", "type": "uint256"}, {"internalType": "uint8", "name": "_provider", "type": "uint8"}, {"internalType": "uint8", "name": "_buyDexType", "type": "uint8"}, {"internalType": "uint8", "name": "_sellDexType", "type": "uint8"}, {"internalType": "uint24", "name": "_buyFeeTier", "type": "uint24"}, {"internalType": "uint24", "name": "_sellFeeTier", "type": "uint24"}], "name": "executeArbitrage", "outputs": [], "stateMutability": "nonpayable", "type": "function"}]')
+
+def _pack_flags(provider: int, buy_dex_type: int, sell_dex_type: int,
+                buy_fee_tier: int, sell_fee_tier: int) -> int:
+    """Pack 5 values into a single uint256 flags word for executeArbitrage."""
+    return (int(provider) |
+           (int(buy_dex_type)  << 8)  |
+           (int(sell_dex_type) << 16) |
+           (int(buy_fee_tier)  << 24) |
+           (int(sell_fee_tier) << 48))
+
+FLASH_ARB_ABI = json.loads('[{"inputs": [{"internalType": "address", "name": "_asset", "type": "address"}, {"internalType": "uint256", "name": "_amount", "type": "uint256"}, {"internalType": "address", "name": "_buyDex", "type": "address"}, {"internalType": "address", "name": "_sellDex", "type": "address"}, {"internalType": "address[]", "name": "_buyPath", "type": "address[]"}, {"internalType": "address[]", "name": "_sellPath", "type": "address[]"}, {"internalType": "uint256", "name": "_minProfit", "type": "uint256"}, {"internalType": "uint256", "name": "_flags", "type": "uint256"}], "name": "executeArbitrage", "outputs": [], "stateMutability": "nonpayable", "type": "function"}]')
 
 BSC_MAINNET_RPC = [
     'https://rpc.ankr.com/bsc',
@@ -346,17 +356,17 @@ class BSCScanner(DexScreenerScanner):
             sell_dex_type = DEX_TYPE.get(opportunity.get('sellDex', ''), 0)
             buy_fee_tier  = DEX_FEE_TIER.get(opportunity.get('buyDex',  ''), 3000)
             sell_fee_tier = DEX_FEE_TIER.get(opportunity.get('sellDex', ''), 3000)
-            logger.info(f"  DEX types: buy={buy_dex_type}(fee={buy_fee_tier}), sell={sell_dex_type}(fee={sell_fee_tier})")
+            flags         = _pack_flags(provider_id, buy_dex_type, sell_dex_type,
+                                        buy_fee_tier, sell_fee_tier)
+            logger.info(f"  flags={hex(flags)} provider={provider_id} "
+                        f"buyType={buy_dex_type}(fee={buy_fee_tier}) "
+                        f"sellType={sell_dex_type}(fee={sell_fee_tier})")
 
             call_args = [
                 base_addr, flash_amt,
-                buy_router_cs,
-                sell_router_cs,
-                buy_path,
-                sell_path,
-                min_profit, deadline, provider_id,
-                buy_dex_type, sell_dex_type,
-                buy_fee_tier, sell_fee_tier,
+                buy_router_cs, sell_router_cs,
+                buy_path, sell_path,
+                min_profit, flags,
             ]
             gas_price  = max(self.w3.eth.gas_price, 2_000_000_000)  # min 2 gwei
             sender     = Web3.to_checksum_address(wallet_address.lower())

@@ -9,7 +9,17 @@ from .dexscreener_scanner import DexScreenerScanner
 
 logger = logging.getLogger(__name__)
 
-FLASH_ARB_ABI = json.loads('[{"inputs": [{"internalType": "address", "name": "_flashLoanAsset", "type": "address"}, {"internalType": "uint256", "name": "_flashLoanAmount", "type": "uint256"}, {"internalType": "address", "name": "_buyDex", "type": "address"}, {"internalType": "address", "name": "_sellDex", "type": "address"}, {"internalType": "address[]", "name": "_buyPath", "type": "address[]"}, {"internalType": "address[]", "name": "_sellPath", "type": "address[]"}, {"internalType": "uint256", "name": "_minProfit", "type": "uint256"}, {"internalType": "uint256", "name": "_deadline", "type": "uint256"}, {"internalType": "uint8", "name": "_provider", "type": "uint8"}, {"internalType": "uint8", "name": "_buyDexType", "type": "uint8"}, {"internalType": "uint8", "name": "_sellDexType", "type": "uint8"}, {"internalType": "uint24", "name": "_buyFeeTier", "type": "uint24"}, {"internalType": "uint24", "name": "_sellFeeTier", "type": "uint24"}], "name": "executeArbitrage", "outputs": [], "stateMutability": "nonpayable", "type": "function"}]')
+
+def _pack_flags(provider: int, buy_dex_type: int, sell_dex_type: int,
+                buy_fee_tier: int, sell_fee_tier: int) -> int:
+    """Pack 5 values into a single uint256 flags word for executeArbitrage."""
+    return (int(provider) |
+           (int(buy_dex_type)  << 8)  |
+           (int(sell_dex_type) << 16) |
+           (int(buy_fee_tier)  << 24) |
+           (int(sell_fee_tier) << 48))
+
+FLASH_ARB_ABI = json.loads('[{"inputs": [{"internalType": "address", "name": "_asset", "type": "address"}, {"internalType": "uint256", "name": "_amount", "type": "uint256"}, {"internalType": "address", "name": "_buyDex", "type": "address"}, {"internalType": "address", "name": "_sellDex", "type": "address"}, {"internalType": "address[]", "name": "_buyPath", "type": "address[]"}, {"internalType": "address[]", "name": "_sellPath", "type": "address[]"}, {"internalType": "uint256", "name": "_minProfit", "type": "uint256"}, {"internalType": "uint256", "name": "_flags", "type": "uint256"}], "name": "executeArbitrage", "outputs": [], "stateMutability": "nonpayable", "type": "function"}]')
 
 ETH_MAINNET_RPC = ['https://eth.llamarpc.com','https://rpc.ankr.com/eth','https://ethereum.publicnode.com']
 ETH_TESTNET_RPC = ['https://rpc.sepolia.org','https://ethereum-sepolia.publicnode.com']
@@ -218,13 +228,13 @@ class ETHScanner(DexScreenerScanner):
             sender         = Web3.to_checksum_address(wallet_address.lower())
             gas_price      = max(self.w3.eth.gas_price, 2_000_000_000)
 
+            flags     = _pack_flags(provider_id, buy_dex_type, sell_dex_type,
+                                    buy_fee_tier, sell_fee_tier)
             call_args = [
                 base_addr, flash_amt,
                 buy_router_cs, sell_router_cs,
                 [base_addr, quote_addr], [quote_addr, base_addr],
-                min_profit, deadline, provider_id,
-                buy_dex_type, sell_dex_type,
-                buy_fee_tier, sell_fee_tier,
+                min_profit, flags,
             ]
             try:
                 estimated = contract.functions.executeArbitrage(*call_args).estimate_gas({'from': sender})
