@@ -5,7 +5,10 @@ Ethereum DEX Scanner — DexScreener price-based
 import os, time, json, logging
 from typing import Optional
 from web3 import Web3
-from .dexscreener_scanner import DexScreenerScanner
+from .dexscreener_scanner import (
+    DexScreenerScanner, token_decimals,
+    DEX_TYPE, DEX_FEE_TIER,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +114,7 @@ class ETHScanner(DexScreenerScanner):
         {'name':'Uniswap V3 Sep Flash',  'fee_bps':5, 'pool':'0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E', 'assets':['WETH','USDC']},
     ]
 
-    GAS_UNITS        = 600_000
+    GAS_UNITS        = 400_000
     GAS_GWEI_MAINNET = 20.0
     GAS_GWEI_TESTNET = 1.2
     NATIVE_PRICE_USD = 3500.0

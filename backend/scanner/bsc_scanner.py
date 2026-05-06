@@ -7,7 +7,10 @@ import os, time, json, logging
 from typing import Optional
 from web3 import Web3
 from web3.middleware import geth_poa_middleware
-from .dexscreener_scanner import DexScreenerScanner
+from .dexscreener_scanner import (
+    DexScreenerScanner, token_decimals,
+    DEX_TYPE, DEX_FEE_TIER,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -172,8 +175,8 @@ class BSCScanner(DexScreenerScanner):
         {'name':'PancakeSwap V2 Testnet Flash','fee_bps':25,'pool':'0xD99D1c33F9fC3444f8101754aBC46c52416550D1','assets':['WBNB','USDT','USDC','BUSD']},
     ]
 
-    GAS_UNITS         = 600_000
-    GAS_GWEI_MAINNET  = 3.0
+    GAS_UNITS         = 300_000
+    GAS_GWEI_MAINNET  = 1.5
     GAS_GWEI_TESTNET  = 10.0
     NATIVE_PRICE_USD  = 600.0
 

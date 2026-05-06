@@ -5,7 +5,10 @@ Base Network DEX Scanner — DexScreener price-based
 import os, time, json, logging
 from typing import Optional
 from web3 import Web3
-from .dexscreener_scanner import DexScreenerScanner
+from .dexscreener_scanner import (
+    DexScreenerScanner, token_decimals,
+    DEX_TYPE, DEX_FEE_TIER,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +127,7 @@ class BaseScanner(DexScreenerScanner):
         {'name':'Uniswap V3 Base Sep', 'fee_bps':5, 'pool':'0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24', 'assets':['WETH','USDC']},
     ]
 
-    GAS_UNITS        = 600_000
+    GAS_UNITS        = 300_000
     GAS_GWEI_MAINNET = 0.005
     GAS_GWEI_TESTNET = 0.001
     NATIVE_PRICE_USD = 3500.0

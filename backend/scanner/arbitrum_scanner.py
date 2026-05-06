@@ -5,7 +5,10 @@ Arbitrum DEX Scanner — DexScreener price-based
 import os, time, json, logging
 from typing import Optional
 from web3 import Web3
-from .dexscreener_scanner import DexScreenerScanner
+from .dexscreener_scanner import (
+    DexScreenerScanner, token_decimals,
+    DEX_TYPE, DEX_FEE_TIER,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +140,7 @@ class ArbitrumScanner(DexScreenerScanner):
         {'name':'Balancer V2 Arb Sep','fee_bps':0, 'pool':'0xBA12222222228d8Ba445958a75a0704d566BF2C8', 'assets':['WETH','USDC']},
     ]
 
-    GAS_UNITS        = 600_000
+    GAS_UNITS        = 350_000
     GAS_GWEI_MAINNET = 0.1
     GAS_GWEI_TESTNET = 0.05
     NATIVE_PRICE_USD = 3500.0
