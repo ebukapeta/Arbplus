@@ -43,13 +43,13 @@ DEX_ROUTERS_MAINNET = {
     'PancakeSwap V3':  '0x1b81D678ffb9C0263b24A97847620C99d213eB14',
     'ApeSwap':         '0xcF0feBd3f17CEf5b47b0cD257aCf6025c5BFf3b7',
     'BiSwap':          '0x3a6d8cA21D1CF76F653A67577FA0D27453350dD8',
-    'MDEX':            '0x62c65B31E9b1D9b2580e089f4D2f4fFb8F0dAa5E',
+    'MDEX':            '0x7DAe51BD3E3376B8c7c4900E9107f12Be3AF1bA8',  # MDEX BSC router
     'BabySwap':        '0x325E343f1dE602396E256B67eFd1F61C3A6B38Bd',
     'Thena':           '0xd4ae6eCA985340Dd434D38F470aCCce4DC78d109',
     'KnightSwap':      '0x05E61E0cDcD2170a76F9568a110CEe3AFdD6c46f',
     'SushiSwap':       '0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506',
     'Nomiswap':        '0xD654953D746f0b114d1F85332Dc43446ac79413d',
-    'Squadswap':       '0xA07c5b74C9B40447a954e1466938b865b6BBea36',  # Squadswap BSC router
+    'Squadswap':       '0x1B6C9c20693afDE803B27F8782156c0f892ABC2d',  # Squadswap V2 router
     # Newly whitelisted BSC DEXes — verified mainnet router addresses
     'Swych':           '0x6131B5fae19EA4f9D964eAc0408E4408b66337b5',  # Swych BSC V2 router
     'AutoShark':       '0xB0EeB0632bAB15F6f14F418d39273af54DB87f84',  # AutoShark router
@@ -87,7 +87,7 @@ class BSCScanner(DexScreenerScanner):
         'DAI':  '0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3',
         'CAKE': '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82',
         'LINK': '0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD',
-        'XVS':  '0xcF6BB5389c92Bdda8a3747Ddb454cB7a64626C63',
+        'FDUSD':  '0xcF6BB5389c92Bdda8a3747Ddb454cB7a64626C63',
     }
     BASE_TOKENS_TESTNET = {
         'WBNB': '0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd',
@@ -102,7 +102,7 @@ class BSCScanner(DexScreenerScanner):
 
     PRICE_FALLBACKS = {
         'WBNB':600.0,'USDT':1.0,'USDC':1.0,'BTCB':65000.0,
-        'BUSD':1.0,'ETH':3500.0,'DAI':1.0,'CAKE':3.0,'LINK':15.0,'XVS':8.0,
+        'BUSD':1.0,'ETH':3500.0,'DAI':1.0,'CAKE':3.0,'LINK':15.0,'FDUSD':1.0,
     }
 
     # DexScreener dexId → canonical name used in UI config
@@ -167,9 +167,17 @@ class BSCScanner(DexScreenerScanner):
     }
 
     FLASH_PROVIDERS_MAINNET = [
-        {'name':'DODO Flash',           'fee_bps':0,  'pool':'0x9ad32e3054268B849b84a8dBcC7c8f7c52E4e69A', 'assets':['USDT','USDC','BUSD']},
-        {'name':'PancakeSwap V3 Flash', 'fee_bps':1,  'pool':'0x46A15B0b27311cedF172AB29E4f4766fbE7F4364', 'assets':['WBNB','USDT','USDC','BTCB','CAKE']},
-        {'name':'Aave V3 BSC',          'fee_bps':5,  'pool':'0x6807dc923806fE8Fd134338EABCA509979a7e0cB', 'assets':['WBNB','USDT','USDC','BTCB','ETH','DAI']},
+        # DODO pool 0x9ad3... is a USDT/USDC pool — can only lend USDT or USDC
+        {'name':'DODO Flash',           'fee_bps':0,  'pool':'0x9ad32e3054268B849b84a8dBcC7c8f7c52E4e69A', 'assets':['USDT','USDC']},
+        # PCS V3 pool 0x46A1... is WBNB/USDT 0.01% — can only lend WBNB or USDT
+        {'name':'PancakeSwap V3 Flash', 'fee_bps':1,  'pool':'0x46A15B0b27311cedF172AB29E4f4766fbE7F4364', 'assets':['WBNB','USDT']},
+        # Aave V3 BSC is the universal provider — widest asset support
+        {'name':'Aave V3 BSC',          'fee_bps':5,  'pool':'0x6807dc923806fE8Fd134338EABCA509979a7e0cB',
+         'assets':['WBNB','USDT','USDC','BTCB','ETH','DAI','BUSD','FDUSD']},
+        # CAKE/WBNB PCS V3 pool — provider 3, for CAKE flash loans only
+        {'name':'PancakeSwap V3 CAKE',  'fee_bps':1,  'pool':'0x7f51c8AaA6B0599aBd16674e2b17FEC7a9f674A1', 'assets':['CAKE']},
+        # LINK/WBNB PancakeSwap V3 0.05% pool — provider 4
+        {'name':'PancakeSwap V3 LINK',  'fee_bps':5,  'pool':'0x3EF2a87b3C4cB79bB1dc1f80D4f53b3B1eCe43E', 'assets':['LINK']},
     ]
     FLASH_PROVIDERS_TESTNET = [
         {'name':'PancakeSwap V2 Testnet Flash','fee_bps':25,'pool':'0xD99D1c33F9fC3444f8101754aBC46c52416550D1','assets':['WBNB','USDT','USDC','BUSD']},
@@ -285,10 +293,14 @@ class BSCScanner(DexScreenerScanner):
         except Exception:
             return [from_addr, to_addr]  # fallback — can't validate
 
-        for path in [
-            [from_addr, to_addr],
-            [from_addr, self.NATIVE_INTERMEDIATE, to_addr],
-        ]:
+        paths_to_try = [[from_addr, to_addr]]
+        native = self.NATIVE_INTERMEDIATE.lower()
+        # Only try intermediate path if neither token IS the native token
+        # (avoids circular paths like [WBNB, WBNB, X] or [X, WBNB, WBNB])
+        if from_addr.lower() != native and to_addr.lower() != native:
+            paths_to_try.append([from_addr, self.NATIVE_INTERMEDIATE, to_addr])
+
+        for path in paths_to_try:
             try:
                 out = router.functions.getAmountsOut(amount_wei, path).call()
                 if out and out[-1] > 0:
@@ -315,7 +327,7 @@ class BSCScanner(DexScreenerScanner):
             # Convert USD net profit to token-native units for the on-chain minProfit guard.
             # netProfit is in USD; the contract compares in token units (wei).
             # We use 85% of expected profit as the floor (15% slippage buffer).
-            net_profit_usd  = float(opportunity.get('netProfit', 0) or 0)
+            net_profit_usd  = float(opportunity.get('netProfitUsd', 0) or 0)  # USD value, not token units
             loan_asset_sym  = (opportunity.get('baseToken') or opportunity.get('flashLoanAsset') or '').upper()
             token_price_usd = float((self.PRICE_FALLBACKS or {}).get(loan_asset_sym, 0) or 0)
             if token_price_usd > 0 and net_profit_usd > 0:
@@ -337,10 +349,14 @@ class BSCScanner(DexScreenerScanner):
             flash_provider = opportunity.get('flashLoanProvider', '')
             if 'DODO' in flash_provider:
                 provider_id = 0
+            elif 'CAKE' in flash_provider:
+                provider_id = 3   # CAKE/WBNB PCS V3 pool
+            elif 'LINK' in flash_provider:
+                provider_id = 4   # LINK/WBNB PCS V3 pool
             elif 'Pancake' in flash_provider and 'V3' in flash_provider:
-                provider_id = 1
+                provider_id = 1   # WBNB/USDT PCS V3 pool
             else:
-                provider_id = 2  # Aave V3 BSC — widest asset support
+                provider_id = 2   # Aave V3 BSC
 
             buy_router_cs  = Web3.to_checksum_address(buy_router_raw.lower())
             sell_router_cs = Web3.to_checksum_address(sell_router_raw.lower())

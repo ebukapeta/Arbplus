@@ -194,6 +194,33 @@ class ETHScanner(DexScreenerScanner):
                 return addr
         return ''
 
+
+    NATIVE_INTERMEDIATE = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'  # WETH
+
+    def _resolve_path(self, router_addr: str, from_addr: str, to_addr: str, amount_wei: int) -> list:
+        """Validate swap path on-chain. Returns direct or intermediate path, [] if none work."""
+        import json as _json
+        ROUTER_ABI = '[{"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"}],"name":"getAmountsOut","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"view","type":"function"}]'
+        try:
+            router = self.w3.eth.contract(
+                address=Web3.to_checksum_address(router_addr),
+                abi=_json.loads(ROUTER_ABI)
+            )
+        except Exception:
+            return [from_addr, to_addr]
+        native = self.NATIVE_INTERMEDIATE.lower()
+        paths = [[from_addr, to_addr]]
+        if from_addr.lower() != native and to_addr.lower() != native:
+            paths.append([from_addr, self.NATIVE_INTERMEDIATE, to_addr])
+        for path in paths:
+            try:
+                out = router.functions.getAmountsOut(amount_wei, path).call()
+                if out and out[-1] > 0:
+                    return path
+            except Exception:
+                continue
+        return []
+
     def execute_trade(self, opportunity: dict, wallet_address: str, contract_address: str) -> dict:
         if not self.w3:
             self._connect()
@@ -209,7 +236,7 @@ class ETHScanner(DexScreenerScanner):
             # Convert USD net profit to token-native units for the on-chain minProfit guard.
             # netProfit is in USD; the contract compares in token units (wei).
             # We use 85% of expected profit as the floor (15% slippage buffer).
-            net_profit_usd  = float(opportunity.get('netProfit', 0) or 0)
+            net_profit_usd  = float(opportunity.get('netProfitUsd', 0) or 0)  # USD value, not token units
             loan_asset_sym  = (opportunity.get('baseToken') or opportunity.get('flashLoanAsset') or '').upper()
             token_price_usd = float((self.PRICE_FALLBACKS or {}).get(loan_asset_sym, 0) or 0)
             if token_price_usd > 0 and net_profit_usd > 0:
@@ -217,7 +244,7 @@ class ETHScanner(DexScreenerScanner):
             else:
                 min_profit = 0  # no price info — let on-chain profit check handle it
             deadline   = int(time.time()) + 90    # 90s — stale arb opps revert cleanly
-            provider_id= 1 if 'Balancer' in opportunity.get('flashLoanProvider', '') else 0
+            provider_id= 0 if 'Balancer' in opportunity.get('flashLoanProvider', '') else 1  # 0=Balancer, 1=Aave
             buy_router  = self._resolve_router(opportunity['buyDex'])
             sell_router = self._resolve_router(opportunity['sellDex'])
             if not buy_router or not sell_router:
@@ -231,12 +258,18 @@ class ETHScanner(DexScreenerScanner):
             sender         = Web3.to_checksum_address(wallet_address.lower())
             gas_price      = max(self.w3.eth.gas_price, 2_000_000_000)
 
+            buy_path  = self._resolve_path(buy_router_cs, base_addr, quote_addr, flash_amt)
+            sell_path = self._resolve_path(sell_router_cs, quote_addr, base_addr, flash_amt)
+            if not buy_path:
+                return {'status':'error','error':f'No valid buy path {opportunity["baseToken"]}→{opportunity["quoteToken"]} on {opportunity["buyDex"]}'}
+            if not sell_path:
+                return {'status':'error','error':f'No valid sell path {opportunity["quoteToken"]}→{opportunity["baseToken"]} on {opportunity["sellDex"]}'}
             flags     = _pack_flags(provider_id, buy_dex_type, sell_dex_type,
                                     buy_fee_tier, sell_fee_tier)
             call_args = [
                 base_addr, flash_amt,
                 buy_router_cs, sell_router_cs,
-                [base_addr, quote_addr], [quote_addr, base_addr],
+                buy_path, sell_path,
                 min_profit, flags,
             ]
             try:

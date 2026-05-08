@@ -648,6 +648,15 @@ class DexScreenerScanner:
             opp['testnet']           = self.testnet
             opp['executionStatus']   = 'candidate'
 
+            # Check if the selected provider actually supports the loan token.
+            # If no provider supports it, mark as no_flash_loan so execution is skipped.
+            # (e.g. XVS, LINK — not in any BSC flash loan provider's asset list)
+            base_sym     = opp['baseToken'].upper()
+            provider_assets = provider.get('assets', [])
+            if provider_assets and base_sym not in provider_assets:
+                opp['executionStatus']   = 'no_flash_loan'
+                opp['rejectionReason']   = f'{base_sym} not supported by any flash loan provider'
+
         # ── Verification gate ─────────────────────────────────────────────
         # Run reserve + router checks on EVM chains (requires Web3).
         # Solana validation is handled in SolanaScanner.scan() override.
