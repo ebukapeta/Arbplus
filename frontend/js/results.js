@@ -85,6 +85,7 @@ const ResultsManager = (() => {
     const isRejected    = execStatus === 'rejected';
     const isNoReserve   = execStatus === 'no_reserve';
     const isSizeWarn    = execStatus === 'size_warn';
+    const isNoFlashLoan = execStatus === 'no_flash_loan';
 
     const spreadClass   = opp.spread > 2 ? 'good' : '';
     const baseColor     = getTokenColor(opp.baseToken  || '');
@@ -99,7 +100,7 @@ const ResultsManager = (() => {
     const gasW      = Math.max(0, 100 - netW - feeW);
 
     const canExecute = (isProfitable || isVerified || isCandidate || isMarginal || isNoReserve || isSizeWarn)
-                       && WalletManager.isConnected() && !isRejected;
+                       && WalletManager.isConnected() && !isRejected && !isNoFlashLoan;
 
     // Provider label — auto-selected by backend
     const providerLabel = opp.flashLoanProvider || 'Auto';
@@ -126,6 +127,7 @@ const ResultsManager = (() => {
       : isMarginal    ? '~ Marginal'
       : isNoReserve   ? '◌ CGR'
       : isSizeWarn    ? '⚠ Size Warn'
+      : isNoFlashLoan ? '⚡✗ No Flash Provider'
       : isRejected    ? '✗ Rejected'
       : '✗ Loss'}
     </div>
@@ -320,7 +322,20 @@ const ResultsManager = (() => {
     let   txHash = '';
 
     try {
-      // ── Step 0: Ensure wallet is on the correct chain ──────────────────
+      // ── Step 0: Warn if opportunity is candidate (path unverified) ─────
+      const execStatusCheck = opp.executionStatus || opp.status;
+      if (execStatusCheck === 'candidate' || execStatusCheck === 'no_reserve' || execStatusCheck === 'size_warn') {
+        const proceed = confirm(
+          `⚠️ Unverified Opportunity\n\n` +
+          `This opportunity is marked "${execStatusCheck}" — its swap path could not be ` +
+          `fully verified on-chain before execution.\n\n` +
+          `The transaction may fail. Gas fees will still be charged if it reaches the chain.\n\n` +
+          `Proceed anyway?`
+        );
+        if (!proceed) return;
+      }
+
+      // ── Step 1: Ensure wallet is on the correct chain ──────────────────
       // The user may have their wallet on a different chain (e.g. Arbitrum)
       // while executing a BSC opportunity. We must switch before signing.
       renderSteps(0, done);
