@@ -439,7 +439,7 @@ class DexScreenerScanner:
     BASE_TOKENS_TESTNET: dict = {}
     PRICE_FALLBACKS: dict = {}
     DEX_ALIASES: dict = {}
-    STABLE_SYMBOLS: set = {'USDT','USDC','DAI','BUSD','FRAX','LUSD','GHO','USDbC','USDR'}
+    STABLE_SYMBOLS: set = {'USDT','USDC','DAI','BUSD','FDUSD','FRAX','LUSD','GHO','USDbC','USDR'}
     FLASH_PROVIDERS_MAINNET: list = []
     FLASH_PROVIDERS_TESTNET: list = []
     GAS_UNITS:  int   = 350_000
