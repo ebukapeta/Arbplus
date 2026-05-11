@@ -45,7 +45,7 @@ const NETWORK_CONFIG = {
         { symbol: 'DAI',  address: '0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3' },
         { symbol: 'CAKE', address: '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82' },
         { symbol: 'LINK', address: '0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD' },
-        { symbol: 'XVS',  address: '0xcF6BB5389c92Bdda8a3747Ddb454cB7a64626C63' },
+        { symbol: 'FDUSD', address: '0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409' },
       ],
       dexes: [
         'PancakeSwap V2','PancakeSwap V3','ApeSwap','BiSwap',
@@ -289,7 +289,7 @@ function activeCfg() {
 const TOKEN_COLORS = {
   // BSC
   WBNB: '#f0b90b', BTCB: '#f7931a', CAKE: '#ff7e00', BUSD: '#f0b90b',
-  BSW:  '#1fc7d4', XVS:  '#0a3d62',
+  BSW:  '#1fc7d4', FDUSD: '#2C7EEA',
   // Stablecoins
   USDT: '#26a17b', USDC: '#2775ca', DAI: '#f9a606', FRAX: '#000000',
   LUSD: '#1542cd', MIM:  '#9695a4', GHO: '#6749d6', crvUSD: '#b5cbff',
