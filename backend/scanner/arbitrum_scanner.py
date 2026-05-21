@@ -224,7 +224,26 @@ class ArbitrumScanner(DexScreenerScanner):
 
     NATIVE_INTERMEDIATE = '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1'  # WETH
 
-    def _resolve_path(self, router_addr: str, from_addr: str, to_addr: str, amount_wei: int) -> list:
+
+    _PAIR_ABI = __import__('json').loads(
+        '[{"inputs":[],"name":"getReserves","outputs":[{"internalType":"uint112","name":"_reserve0","type":"uint112"},{"internalType":"uint112","name":"_reserve1","type":"uint112"},{"internalType":"uint32","name":"_blockTimestampLast","type":"uint32"}],"stateMutability":"view","type":"function"},' +
+        '{"inputs":[],"name":"token0","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}]'
+    )
+
+    def _validate_pair(self, pair_addr: str) -> bool:
+        if not pair_addr or len(pair_addr) < 42:
+            return False
+        try:
+            pair = self.w3.eth.contract(
+                address=Web3.to_checksum_address(pair_addr),
+                abi=self._PAIR_ABI
+            )
+            r0, r1, _ = pair.functions.getReserves().call()
+            return r0 > 0 and r1 > 0
+        except Exception:
+            return False
+
+    def _resolve_path(self, router_addr: str, from_addr: str, to_addr: str, amount_wei: int, pair_addr: str = '') -> list:
         """Validate swap path on-chain. Returns direct or intermediate path, [] if none work."""
         import json as _json
         ROUTER_ABI = '[{"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"}],"name":"getAmountsOut","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"view","type":"function"}]'
@@ -285,8 +304,20 @@ class ArbitrumScanner(DexScreenerScanner):
             sender         = Web3.to_checksum_address(wallet_address.lower())
             gas_price      = max(self.w3.eth.gas_price, 2_000_000_000)
 
-            buy_path  = self._resolve_path(buy_router_cs, base_addr, quote_addr, flash_amt)
-            sell_path = self._resolve_path(sell_router_cs, quote_addr, base_addr, flash_amt)
+            buy_pool_addr  = opportunity.get('buyPoolAddress',  '')
+            sell_pool_addr = opportunity.get('sellPoolAddress', '')
+            if buy_dex_type == 0:
+                if not buy_pool_addr or not self._validate_pair(buy_pool_addr):
+                    return {'status':'error','error':f'No valid buy pool for {opportunity["buyDex"]}'}
+                buy_path = [Web3.to_checksum_address(buy_pool_addr.lower()), base_addr, quote_addr]
+            else:
+                buy_path = [base_addr, quote_addr]
+            if sell_dex_type == 0:
+                if not sell_pool_addr or not self._validate_pair(sell_pool_addr):
+                    return {'status':'error','error':f'No valid sell pool for {opportunity["sellDex"]}'}
+                sell_path = [Web3.to_checksum_address(sell_pool_addr.lower()), quote_addr, base_addr]
+            else:
+                sell_path = [quote_addr, base_addr]
             if not buy_path:
                 return {'status':'error','error':f'No valid buy path {opportunity["baseToken"]}→{opportunity["quoteToken"]} on {opportunity["buyDex"]}'}
             if not sell_path:

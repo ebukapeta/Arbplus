@@ -16,13 +16,56 @@ logger = logging.getLogger(__name__)
 
 
 def _pack_flags(provider: int, buy_dex_type: int, sell_dex_type: int,
-                buy_fee_tier: int, sell_fee_tier: int) -> int:
-    """Pack 5 values into a single uint256 flags word for executeArbitrage."""
+                buy_fee_tier: int, sell_fee_tier: int,
+                flash_pool: str = '0x0000000000000000000000000000000000000000') -> int:
+    """
+    Pack values into a single uint256 flags word for executeArbitrage.
+    bits  0-7:   provider (0=DODO, 1=PCSv3, 2=Aave)
+    bits  8-15:  buyDexType
+    bits 16-23:  sellDexType
+    bits 24-47:  buyFeeTier
+    bits 48-71:  sellFeeTier
+    bits 72-231: flashLoanPool address (passed for PCS V3 — looked up from factory)
+    """
+    pool_int = int(flash_pool, 16) if flash_pool.startswith('0x') else 0
     return (int(provider) |
            (int(buy_dex_type)  << 8)  |
            (int(sell_dex_type) << 16) |
            (int(buy_fee_tier)  << 24) |
-           (int(sell_fee_tier) << 48))
+           (int(sell_fee_tier) << 48) |
+           (pool_int           << 72))
+
+# PancakeSwap V3 Factory BSC — used to look up correct pool addresses at runtime
+PANCAKE_V3_FACTORY = '0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865'
+PANCAKE_V3_FACTORY_ABI = '[{"inputs":[{"internalType":"address","name":"tokenA","type":"address"},{"internalType":"address","name":"tokenB","type":"address"},{"internalType":"uint24","name":"fee","type":"uint24"}],"name":"getPool","outputs":[{"internalType":"address","name":"pool","type":"address"}],"stateMutability":"view","type":"function"}]'
+
+def get_pcs_v3_pool(w3, token_addr: str, paired_with: str = '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c',
+                    fee_tiers: list = None) -> str:
+    """
+    Look up the real PancakeSwap V3 pool for a token pair using the factory.
+    Returns the pool address or '' if none found.
+    fee_tiers: list of fee tiers to try in order (default: [100, 500, 2500, 10000])
+    """
+    if fee_tiers is None:
+        fee_tiers = [100, 500, 2500, 10000]
+    import json
+    try:
+        factory = w3.eth.contract(
+            address=w3.to_checksum_address(PANCAKE_V3_FACTORY),
+            abi=json.loads(PANCAKE_V3_FACTORY_ABI)
+        )
+        for fee in fee_tiers:
+            pool = factory.functions.getPool(
+                w3.to_checksum_address(token_addr),
+                w3.to_checksum_address(paired_with),
+                fee
+            ).call()
+            if pool and pool != '0x' + '0'*40:
+                return pool
+    except Exception as e:
+        pass
+    return ''
+
 
 FLASH_ARB_ABI = json.loads('[{"inputs": [{"internalType": "address", "name": "_asset", "type": "address"}, {"internalType": "uint256", "name": "_amount", "type": "uint256"}, {"internalType": "address", "name": "_buyDex", "type": "address"}, {"internalType": "address", "name": "_sellDex", "type": "address"}, {"internalType": "address[]", "name": "_buyPath", "type": "address[]"}, {"internalType": "address[]", "name": "_sellPath", "type": "address[]"}, {"internalType": "uint256", "name": "_minProfit", "type": "uint256"}, {"internalType": "uint256", "name": "_flags", "type": "uint256"}], "name": "executeArbitrage", "outputs": [], "stateMutability": "nonpayable", "type": "function"}]')
 
@@ -87,7 +130,7 @@ class BSCScanner(DexScreenerScanner):
         'DAI':  '0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3',
         'CAKE': '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82',
         'LINK': '0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD',
-        'FDUSD':  '0xcF6BB5389c92Bdda8a3747Ddb454cB7a64626C63',
+        'FDUSD':  '0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409',
     }
     BASE_TOKENS_TESTNET = {
         'WBNB': '0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd',
@@ -169,15 +212,15 @@ class BSCScanner(DexScreenerScanner):
     FLASH_PROVIDERS_MAINNET = [
         # DODO pool 0x9ad3... is a USDT/USDC pool — can only lend USDT or USDC
         {'name':'DODO Flash',           'fee_bps':0,  'pool':'0x9ad32e3054268B849b84a8dBcC7c8f7c52E4e69A', 'assets':['USDT','USDC']},
-        # PCS V3 pool 0x46A1... is WBNB/USDT 0.01% — can only lend WBNB or USDT
-        {'name':'PancakeSwap V3 Flash', 'fee_bps':1,  'pool':'0x46A15B0b27311cedF172AB29E4f4766fbE7F4364', 'assets':['WBNB','USDT']},
+        # PancakeSwap V3 Flash: pool address looked up dynamically via tokenFlashPool
+        # mapping on the contract. Owner must call setTokenFlashPool() after deploy.
+        # Tokens supported depend on which pools have been registered.
+        {'name':'PancakeSwap V3 Flash', 'fee_bps':1,  'pool':'dynamic', 'assets':['WBNB','USDT','CAKE','BTCB','ETH','LINK']},
         # Aave V3 BSC is the universal provider — widest asset support
         {'name':'Aave V3 BSC',          'fee_bps':5,  'pool':'0x6807dc923806fE8Fd134338EABCA509979a7e0cB',
-         'assets':['WBNB','USDT','USDC','BTCB','ETH','DAI','BUSD','FDUSD']},
+         'assets':['WBNB','USDT','USDC','BTCB','ETH','DAI','BUSD','FDUSD','LINK']},
         # CAKE/WBNB PCS V3 pool — provider 3, for CAKE flash loans only
         {'name':'PancakeSwap V3 CAKE',  'fee_bps':1,  'pool':'0x7f51c8AaA6B0599aBd16674e2b17FEC7a9f674A1', 'assets':['CAKE']},
-        # LINK/WBNB PancakeSwap V3 0.05% pool — provider 4
-        {'name':'PancakeSwap V3 LINK',  'fee_bps':5,  'pool':'0x3EF2a87b3C4cB79bB1dc1f80D4f53b3B1eCe43E', 'assets':['LINK']},
     ]
     FLASH_PROVIDERS_TESTNET = [
         {'name':'PancakeSwap V2 Testnet Flash','fee_bps':25,'pool':'0xD99D1c33F9fC3444f8101754aBC46c52416550D1','assets':['WBNB','USDT','USDC','BUSD']},
@@ -195,7 +238,7 @@ class BSCScanner(DexScreenerScanner):
 
     STABLECOIN_SEARCH_QUERIES: list = [
         'USDT/WBNB', 'USDC/WBNB', 'BUSD/WBNB', 'USDT/USDC',
-        'BTCB/WBNB', 'ETH/WBNB', 'CAKE/WBNB', 'USDT/BUSD',
+        'BTCB/WBNB', 'ETH/WBNB', 'CAKE/WBNB', 'USDT/BUSD', 'FDUSD/WBNB', 'FDUSD/USDT',
     ]
 
     DEX_FEE_BPS: dict = {
@@ -277,37 +320,74 @@ class BSCScanner(DexScreenerScanner):
 
     NATIVE_INTERMEDIATE = '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c'  # WBNB
 
-    def _resolve_path(self, router_addr: str, from_addr: str, to_addr: str, amount_wei: int) -> list:
+    # Minimal ABI to read reserves and token0 from any Uniswap V2 style pair contract
+    _PAIR_ABI = __import__('json').loads(
+        '[{"inputs":[],"name":"getReserves","outputs":[{"internalType":"uint112","name":"_reserve0","type":"uint112"},{"internalType":"uint112","name":"_reserve1","type":"uint112"},{"internalType":"uint32","name":"_blockTimestampLast","type":"uint32"}],"stateMutability":"view","type":"function"},' +
+        '{"inputs":[],"name":"token0","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},' +
+        '{"inputs":[],"name":"token1","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}]'
+    )
+
+    def _validate_pair(self, pair_addr: str) -> bool:
         """
-        Return the best swap path from→to on this router.
-        Tries direct path first, then routes through WBNB if direct fails.
-        Returns [] if no valid path found.
+        Validate a pool using its pair contract address (from DexScreener).
+        Calls getReserves() directly — no router address needed.
+        Returns True if pool has liquidity (both reserves > 0).
         """
-        ROUTER_ABI = '[{"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"}],"name":"getAmountsOut","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"view","type":"function"}]'
+        if not pair_addr or len(pair_addr) < 42:
+            return False
+        try:
+            pair = self.w3.eth.contract(
+                address=Web3.to_checksum_address(pair_addr),
+                abi=self._PAIR_ABI
+            )
+            r0, r1, _ = pair.functions.getReserves().call()
+            return r0 > 0 and r1 > 0
+        except Exception:
+            return False
+
+    def _resolve_path(self, router_addr: str, from_addr: str, to_addr: str,
+                      amount_wei: int, pair_addr: str = '') -> list:
+        """
+        Return the swap path for from_addr→to_addr.
+
+        Strategy:
+        1. If pair_addr supplied (from DexScreener), validate via getReserves()
+           on the actual pair contract. No router needed — avoids unverified routers.
+        2. If pair_addr missing, fall back to router.getAmountsOut (original behaviour).
+        3. Returns [from_addr, to_addr] if direct pair validated,
+                   [from_addr, WBNB, to_addr] if only intermediate exists,
+                   [] if nothing works.
+        """
+        native = self.NATIVE_INTERMEDIATE.lower()
+
+        # Strategy 1: validate using actual pair contract from DexScreener
+        if pair_addr and len(pair_addr) >= 42:
+            if self._validate_pair(pair_addr):
+                return [from_addr, to_addr]  # direct pair confirmed on-chain
+            # Direct pair invalid — try intermediate (different pair contract)
+            # We don't have the intermediate pair address so fall through to router
+
+        # Strategy 2: router.getAmountsOut fallback (for intermediate paths)
+        import json as _json
+        ROUTER_ABI = _json.loads('[{"inputs":[{"internalType":"uint256","name":"amountIn","type":"uint256"},{"internalType":"address[]","name":"path","type":"address[]"}],"name":"getAmountsOut","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"stateMutability":"view","type":"function"}]')
         try:
             router = self.w3.eth.contract(
                 address=Web3.to_checksum_address(router_addr),
-                abi=self.w3.eth.contract(abi=ROUTER_ABI).abi if False else
-                    __import__('json').loads(ROUTER_ABI)
+                abi=ROUTER_ABI
             )
+            paths_to_try = [[from_addr, to_addr]]
+            if from_addr.lower() != native and to_addr.lower() != native:
+                paths_to_try.append([from_addr, self.NATIVE_INTERMEDIATE, to_addr])
+            for path in paths_to_try:
+                try:
+                    out = router.functions.getAmountsOut(amount_wei, path).call()
+                    if out and out[-1] > 0:
+                        return path
+                except Exception:
+                    continue
         except Exception:
-            return [from_addr, to_addr]  # fallback — can't validate
-
-        paths_to_try = [[from_addr, to_addr]]
-        native = self.NATIVE_INTERMEDIATE.lower()
-        # Only try intermediate path if neither token IS the native token
-        # (avoids circular paths like [WBNB, WBNB, X] or [X, WBNB, WBNB])
-        if from_addr.lower() != native and to_addr.lower() != native:
-            paths_to_try.append([from_addr, self.NATIVE_INTERMEDIATE, to_addr])
-
-        for path in paths_to_try:
-            try:
-                out = router.functions.getAmountsOut(amount_wei, path).call()
-                if out and out[-1] > 0:
-                    return path
-            except Exception:
-                continue
-        return []  # no valid path found
+            pass
+        return []
 
     def execute_trade(self, opportunity: dict, wallet_address: str, contract_address: str) -> dict:
         if not self.w3:
@@ -349,12 +429,8 @@ class BSCScanner(DexScreenerScanner):
             flash_provider = opportunity.get('flashLoanProvider', '')
             if 'DODO' in flash_provider:
                 provider_id = 0
-            elif 'CAKE' in flash_provider:
-                provider_id = 3   # CAKE/WBNB PCS V3 pool
-            elif 'LINK' in flash_provider:
-                provider_id = 4   # LINK/WBNB PCS V3 pool
-            elif 'Pancake' in flash_provider and 'V3' in flash_provider:
-                provider_id = 1   # WBNB/USDT PCS V3 pool
+            elif 'PancakeSwap V3' in flash_provider:
+                provider_id = 1   # PCS V3 — pool looked up via tokenFlashPool on contract
             else:
                 provider_id = 2   # Aave V3 BSC
 
@@ -363,20 +439,54 @@ class BSCScanner(DexScreenerScanner):
 
             # Resolve actual swap paths — validates direct pair exists, falls back to
             # native-intermediate routing (e.g. TOKEN→WBNB→TOKEN2) if direct fails.
-            buy_path  = self._resolve_path(buy_router_cs,  base_addr, quote_addr, flash_amt)
-            sell_path = self._resolve_path(sell_router_cs, quote_addr, base_addr, flash_amt)
-            if not buy_path:
-                return {'status': 'error', 'error': f'No valid buy path {opportunity["baseToken"]}→{opportunity["quoteToken"]} on {opportunity["buyDex"]}'}
-            if not sell_path:
-                return {'status': 'error', 'error': f'No valid sell path {opportunity["quoteToken"]}→{opportunity["baseToken"]} on {opportunity["sellDex"]}'}
-            logger.info(f'  Paths: buy={[a[:8] for a in buy_path]}, sell={[a[:8] for a in sell_path]}')
+            buy_pool_addr  = opportunity.get('buyPoolAddress',  '')
+            sell_pool_addr = opportunity.get('sellPoolAddress', '')
+
+            # Build swap paths based on DEX type:
+            #   V2 (dexType=0): [pairAddress, tokenIn, tokenOut]
+            #     Contract calls pair.swap() directly — no router address needed.
+            #     pairAddress comes from DexScreener (verified on-chain).
+            #   V3 (dexType=1): [tokenIn, tokenOut]
+            #     Contract calls router.exactInputSingle().
+
+            if buy_dex_type == 0:
+                # V2: validate pair has reserves, build [pair, tokenIn, tokenOut]
+                if not buy_pool_addr:
+                    return {'status': 'error', 'error': f'No pool address for {opportunity["buyDex"]} — cannot execute V2 direct swap'}
+                if not self._validate_pair(buy_pool_addr):
+                    return {'status': 'error', 'error': f'Buy pool has no reserves: {buy_pool_addr[:12]}...'}
+                buy_path = [Web3.to_checksum_address(buy_pool_addr.lower()), base_addr, quote_addr]
+            else:
+                # V3: standard [tokenIn, tokenOut]
+                buy_path = [base_addr, quote_addr]
+
+            if sell_dex_type == 0:
+                if not sell_pool_addr:
+                    return {'status': 'error', 'error': f'No pool address for {opportunity["sellDex"]} — cannot execute V2 direct swap'}
+                if not self._validate_pair(sell_pool_addr):
+                    return {'status': 'error', 'error': f'Sell pool has no reserves: {sell_pool_addr[:12]}...'}
+                sell_path = [Web3.to_checksum_address(sell_pool_addr.lower()), quote_addr, base_addr]
+            else:
+                sell_path = [quote_addr, base_addr]
+
+            logger.info(f'  buy_path={[a[:10] for a in buy_path]} sell_path={[a[:10] for a in sell_path]}')
 
             buy_dex_type  = DEX_TYPE.get(opportunity.get('buyDex',  ''), 0)
             sell_dex_type = DEX_TYPE.get(opportunity.get('sellDex', ''), 0)
             buy_fee_tier  = DEX_FEE_TIER.get(opportunity.get('buyDex',  ''), 3000)
             sell_fee_tier = DEX_FEE_TIER.get(opportunity.get('sellDex', ''), 3000)
+            # For PancakeSwap V3 (provider_id=1), look up the real pool address
+            # from the PCS V3 factory at runtime — no hardcoded addresses.
+            flash_pool_addr = '0x0000000000000000000000000000000000000000'
+            if provider_id == 1:
+                WBNB = '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c'
+                flash_pool_addr = get_pcs_v3_pool(self.w3, base_addr, WBNB)
+                if not flash_pool_addr:
+                    return {'status': 'error', 'error': f'No PancakeSwap V3 pool found for {opportunity["baseToken"]} — use Aave instead'}
+                logger.info(f'  PCS V3 flash pool for {opportunity["baseToken"]}: {flash_pool_addr}')
+
             flags         = _pack_flags(provider_id, buy_dex_type, sell_dex_type,
-                                        buy_fee_tier, sell_fee_tier)
+                                        buy_fee_tier, sell_fee_tier, flash_pool_addr)
             logger.info(f"  flags={hex(flags)} provider={provider_id} "
                         f"buyType={buy_dex_type}(fee={buy_fee_tier}) "
                         f"sellType={sell_dex_type}(fee={sell_fee_tier})")

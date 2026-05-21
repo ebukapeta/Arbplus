@@ -416,6 +416,8 @@ def derive_opportunities(
             'sellPriceImpact':   round(price_impact_pct / 2, 4),
             'status':            status,
             'poolAddress':       buy['pool_addr'],
+            'buyPoolAddress':    buy['pool_addr'],
+            'sellPoolAddress':   sell['pool_addr'],
             'timestamp':         int(time.time()),
         })
 
