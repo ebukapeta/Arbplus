@@ -439,6 +439,10 @@ class BSCScanner(DexScreenerScanner):
 
             # Resolve actual swap paths — validates direct pair exists, falls back to
             # native-intermediate routing (e.g. TOKEN→WBNB→TOKEN2) if direct fails.
+            buy_dex_type  = DEX_TYPE.get(opportunity.get('buyDex',  ''), 0)
+            sell_dex_type = DEX_TYPE.get(opportunity.get('sellDex', ''), 0)
+            buy_fee_tier  = DEX_FEE_TIER.get(opportunity.get('buyDex',  ''), 3000)
+            sell_fee_tier = DEX_FEE_TIER.get(opportunity.get('sellDex', ''), 3000)
             buy_pool_addr  = opportunity.get('buyPoolAddress',  '')
             sell_pool_addr = opportunity.get('sellPoolAddress', '')
 
@@ -471,10 +475,6 @@ class BSCScanner(DexScreenerScanner):
 
             logger.info(f'  buy_path={[a[:10] for a in buy_path]} sell_path={[a[:10] for a in sell_path]}')
 
-            buy_dex_type  = DEX_TYPE.get(opportunity.get('buyDex',  ''), 0)
-            sell_dex_type = DEX_TYPE.get(opportunity.get('sellDex', ''), 0)
-            buy_fee_tier  = DEX_FEE_TIER.get(opportunity.get('buyDex',  ''), 3000)
-            sell_fee_tier = DEX_FEE_TIER.get(opportunity.get('sellDex', ''), 3000)
             # For PancakeSwap V3 (provider_id=1), look up the real pool address
             # from the PCS V3 factory at runtime — no hardcoded addresses.
             flash_pool_addr = '0x0000000000000000000000000000000000000000'
